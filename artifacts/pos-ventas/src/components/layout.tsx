@@ -21,6 +21,7 @@ import {
   Settings,
   ChevronRight,
   Building2,
+  LockKeyhole,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/currency-context";
@@ -37,6 +38,7 @@ const NAV_GROUPS = [
     label: "Ventas",
     items: [
       { href: "/sales", label: "Historial", icon: ShoppingCart },
+      { href: "/cierre-caja", label: "Cierre de Caja", icon: LockKeyhole },
       { href: "/quotes", label: "Cotizaciones", icon: FileText },
       { href: "/reports", label: "Reportes", icon: BarChart2 },
     ],
