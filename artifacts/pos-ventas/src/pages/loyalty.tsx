@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, Trophy, Users, TrendingUp, Search, ChevronRight, Gift, Award, History } from "lucide-react";
+import { Star, Trophy, Users, TrendingUp, Search, ChevronRight, Gift, Award, History, Zap } from "lucide-react";
 import { Toast, Swal } from "@/lib/swal";
 import { formatCurrency, useCurrency } from "@/contexts/currency-context";
 import { getToken } from "@/lib/auth";
@@ -25,6 +25,28 @@ async function apiFetch(path: string, opts: RequestInit = {}) {
   return res.json();
 }
 
+// ── Tier helpers ──────────────────────────────────────────────────────────────
+
+export const TIERS = {
+  bronze: { label: "Bronce", min: 0,    max: 999,  multiplier: 1.0, emoji: "🥉", bg: "bg-amber-50",   border: "border-amber-300",  text: "text-amber-700",  bar: "bg-amber-400" },
+  silver: { label: "Plata",  min: 1000, max: 4999, multiplier: 1.5, emoji: "🥈", bg: "bg-slate-50",   border: "border-slate-300",  text: "text-slate-600",  bar: "bg-slate-400" },
+  gold:   { label: "Oro",    min: 5000, max: null,  multiplier: 2.0, emoji: "🥇", bg: "bg-yellow-50",  border: "border-yellow-300", text: "text-yellow-700", bar: "bg-yellow-400" },
+} as const;
+
+export type TierName = keyof typeof TIERS;
+
+export function TierBadge({ tier, size = "sm" }: { tier: string; size?: "xs" | "sm" | "md" }) {
+  const t = TIERS[tier as TierName] ?? TIERS.bronze;
+  const px = size === "xs" ? "px-1.5 py-0.5 text-[9px]" : size === "md" ? "px-3 py-1 text-sm" : "px-2 py-0.5 text-[10px]";
+  return (
+    <span className={`inline-flex items-center gap-0.5 rounded-full border font-bold ${t.bg} ${t.border} ${t.text} ${px}`}>
+      {t.emoji} {t.label}
+    </span>
+  );
+}
+
+// ── Interfaces ────────────────────────────────────────────────────────────────
+
 interface LoyaltyMember {
   customerId: number;
   customerName: string;
@@ -35,6 +57,12 @@ interface LoyaltyMember {
   lifetimeEarned: number;
   lifetimeRedeemed: number;
   discountValue: number;
+  tier: TierName;
+  tierLabel: string;
+  tierMultiplier: number;
+  nextTier: { name: string; label: string; min: number } | null;
+  progressToNext: number;
+  pointsToNext: number;
 }
 
 interface PointsTransaction {
@@ -47,12 +75,15 @@ interface PointsTransaction {
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  earned: { label: "Ganados", color: "text-green-700 bg-green-50 border-green-200" },
+  earned:   { label: "Ganados",   color: "text-green-700 bg-green-50 border-green-200" },
   redeemed: { label: "Canjeados", color: "text-orange-700 bg-orange-50 border-orange-200" },
-  adjusted: { label: "Ajuste", color: "text-blue-700 bg-blue-50 border-blue-200" },
+  adjusted: { label: "Ajuste",    color: "text-blue-700 bg-blue-50 border-blue-200" },
+  tier_up:  { label: "¡Nivel!",   color: "text-yellow-700 bg-yellow-50 border-yellow-300" },
 };
 
-function HistoryPanel({ customerId, onClose }: { customerId: number; onClose: () => void }) {
+// ── History Panel ──────────────────────────────────────────────────────────────
+
+function HistoryPanel({ customerId, customerName, onClose }: { customerId: number; customerName: string; onClose: () => void }) {
   const { data: history, isLoading } = useQuery<PointsTransaction[]>({
     queryKey: ["/api/loyalty/history", customerId],
     queryFn: () => apiFetch(`/api/loyalty/history/${customerId}`),
@@ -62,8 +93,10 @@ function HistoryPanel({ customerId, onClose }: { customerId: number; onClose: ()
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="font-bold text-base flex items-center gap-2"><History className="w-4 h-4 text-primary" /> Historial de Puntos</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm">✕</button>
+          <h3 className="font-bold text-base flex items-center gap-2">
+            <History className="w-4 h-4 text-primary" /> Historial — {customerName}
+          </h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm font-bold">✕</button>
         </div>
         <div className="overflow-y-auto p-4 space-y-2">
           {isLoading && <p className="text-center text-sm text-muted-foreground py-8">Cargando...</p>}
@@ -72,16 +105,19 @@ function HistoryPanel({ customerId, onClose }: { customerId: number; onClose: ()
           )}
           {history?.map(tx => {
             const meta = TYPE_LABELS[tx.type] ?? { label: tx.type, color: "text-gray-700 bg-gray-50 border-gray-200" };
+            const isTierUp = tx.type === "tier_up";
             return (
-              <div key={tx.id} className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-muted/20">
+              <div key={tx.id} className={`flex items-center gap-3 p-3 rounded-xl border ${isTierUp ? "border-yellow-200 bg-yellow-50" : "border-border/50 bg-muted/20"}`}>
                 <div className={`text-xs font-semibold px-2 py-1 rounded-full border ${meta.color} shrink-0`}>{meta.label}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground truncate">{tx.notes ?? "—"}</p>
                   <p className="text-[10px] text-muted-foreground/60">{new Date(tx.createdAt).toLocaleString("es")}</p>
                 </div>
-                <span className={`text-sm font-bold shrink-0 ${tx.delta > 0 ? "text-green-700" : "text-orange-600"}`}>
-                  {tx.delta > 0 ? "+" : ""}{tx.delta} pts
-                </span>
+                {!isTierUp && (
+                  <span className={`text-sm font-bold shrink-0 ${tx.delta > 0 ? "text-green-700" : "text-orange-600"}`}>
+                    {tx.delta > 0 ? "+" : ""}{tx.delta} pts
+                  </span>
+                )}
               </div>
             );
           })}
@@ -91,9 +127,43 @@ function HistoryPanel({ customerId, onClose }: { customerId: number; onClose: ()
   );
 }
 
+// ── Tier Progress Card ─────────────────────────────────────────────────────────
+
+function TierProgressBar({ member }: { member: LoyaltyMember }) {
+  const tier = TIERS[member.tier] ?? TIERS.bronze;
+  return (
+    <div className={`rounded-xl border p-3 space-y-1.5 ${tier.bg} ${tier.border}`}>
+      <div className="flex items-center justify-between">
+        <span className={`text-xs font-bold ${tier.text}`}>{tier.emoji} {tier.label}</span>
+        {member.nextTier ? (
+          <span className="text-[10px] text-muted-foreground">
+            {member.pointsToNext.toLocaleString("es")} pts para {member.nextTier.label}
+          </span>
+        ) : (
+          <span className={`text-[10px] font-semibold ${tier.text}`}>Nivel máximo ✨</span>
+        )}
+      </div>
+      {member.nextTier && (
+        <div className="h-1.5 rounded-full bg-black/10 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${tier.bar}`}
+            style={{ width: `${member.progressToNext}%` }}
+          />
+        </div>
+      )}
+      <p className={`text-[10px] ${tier.text} font-medium`}>
+        Multiplicador ×{tier.multiplier} — {member.lifetimeEarned.toLocaleString("es")} pts acumulados
+      </p>
+    </div>
+  );
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────────
+
 export default function Loyalty() {
   const [search, setSearch] = useState("");
-  const [historyFor, setHistoryFor] = useState<number | null>(null);
+  const [historyFor, setHistoryFor] = useState<{ id: number; name: string } | null>(null);
+  const [tierFilter, setTierFilter] = useState<string>("all");
   const { currencySymbol } = useCurrency();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
@@ -110,19 +180,22 @@ export default function Loyalty() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/loyalty/leaderboard"] }),
   });
 
-  const filtered = (members ?? []).filter(m =>
-    m.customerName.toLowerCase().includes(search.toLowerCase()) ||
-    (m.customerEmail ?? "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = (members ?? []).filter(m => {
+    const matchSearch = m.customerName.toLowerCase().includes(search.toLowerCase()) ||
+      (m.customerEmail ?? "").toLowerCase().includes(search.toLowerCase());
+    const matchTier = tierFilter === "all" || m.tier === tierFilter;
+    return matchSearch && matchTier;
+  });
 
   const totalPoints = (members ?? []).reduce((s, m) => s + m.points, 0);
   const totalMembers = members?.length ?? 0;
-  const totalLifetime = (members ?? []).reduce((s, m) => s + m.lifetimeEarned, 0);
+  const goldCount = (members ?? []).filter(m => m.tier === "gold").length;
+  const silverCount = (members ?? []).filter(m => m.tier === "silver").length;
 
   const handleAdjust = async (member: LoyaltyMember) => {
     const { value, isConfirmed } = await Swal.fire({
-      title: `Ajustar puntos de ${member.customerName}`,
-      html: `<p class="text-sm text-gray-600 mb-3">Puntos actuales: <b>${member.points}</b></p>
+      title: `Ajustar puntos — ${member.customerName}`,
+      html: `<p class="text-sm text-gray-600 mb-3">Puntos actuales: <b>${member.points}</b> · Nivel: <b>${member.tierLabel}</b></p>
              <input id="swal-delta" type="number" class="swal2-input" placeholder="Ej: 50 o -20" />
              <textarea id="swal-notes" class="swal2-textarea" placeholder="Motivo (opcional)" rows="2" style="font-size:13px"></textarea>`,
       confirmButtonText: "Aplicar",
@@ -138,8 +211,15 @@ export default function Loyalty() {
     });
     if (!isConfirmed || !value) return;
     try {
-      await adjustMutation.mutateAsync({ customerId: member.customerId, delta: value.delta, notes: value.notes || `Ajuste manual: ${value.delta > 0 ? "+" : ""}${value.delta}` });
-      Toast.fire({ icon: "success", title: `Puntos ajustados: ${value.delta > 0 ? "+" : ""}${value.delta}` });
+      const result = await adjustMutation.mutateAsync({
+        customerId: member.customerId,
+        delta: value.delta,
+        notes: value.notes || `Ajuste manual: ${value.delta > 0 ? "+" : ""}${value.delta}`,
+      });
+      const msg = result.tier !== member.tier
+        ? `¡Ascendió a nivel ${TIERS[result.tier as TierName]?.label ?? result.tier}!`
+        : `Puntos ajustados: ${value.delta > 0 ? "+" : ""}${value.delta}`;
+      Toast.fire({ icon: "success", title: msg });
     } catch (err: any) {
       Toast.fire({ icon: "error", title: err.message });
     }
@@ -152,7 +232,7 @@ export default function Loyalty() {
           <Star className="w-8 h-8 text-primary" />
         </div>
         <h2 className="text-xl font-bold">Sistema de Puntos no habilitado</h2>
-        <p className="text-muted-foreground text-sm">Activa el programa de fidelización en Configuración para comenzar a recompensar a tus clientes.</p>
+        <p className="text-muted-foreground text-sm">Activa el programa en Configuración para comenzar.</p>
         <Button onClick={() => setLocation("/settings")} className="gap-2">
           <ChevronRight className="w-4 h-4" /> Ir a Configuración
         </Button>
@@ -162,45 +242,91 @@ export default function Loyalty() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Programa de Fidelización</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Star className="w-6 h-6 text-amber-500" /> Programa de Fidelización
+        </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {settings.pointsPerUnit} punto{settings.pointsPerUnit !== 1 ? "s" : ""} por cada {currencySymbol}1 · 100 pts = {formatCurrency(100 * Number(settings.pointsRedemptionRate), currencySymbol)} de descuento
+          {settings.pointsPerUnit} pt{settings.pointsPerUnit !== 1 ? "s" : ""} por {currencySymbol}1
+          · 100 pts = {formatCurrency(100 * Number(settings.pointsRedemptionRate), currencySymbol)}
+          · Niveles: 🥉×1 · 🥈×1.5 (1k pts) · 🥇×2 (5k pts)
         </p>
       </div>
 
+      {/* Tier info cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {(Object.entries(TIERS) as [TierName, typeof TIERS.bronze][]).map(([key, t]) => {
+          const count = (members ?? []).filter(m => m.tier === key).length;
+          return (
+            <button
+              key={key}
+              onClick={() => setTierFilter(tierFilter === key ? "all" : key)}
+              className={`rounded-2xl border-2 p-4 text-left transition-all ${
+                tierFilter === key
+                  ? `${t.border} ${t.bg} shadow-md`
+                  : "border-border bg-white hover:border-border/80 hover:shadow-sm"
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-2xl">{t.emoji}</span>
+                <span className={`font-bold text-sm ${tierFilter === key ? t.text : ""}`}>{t.label}</span>
+                <span className="ml-auto text-xs font-semibold text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                  {count} cliente{count !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {key === "bronze" ? "0 – 999 pts" : key === "silver" ? "1,000 – 4,999 pts" : "5,000+ pts"}
+              </p>
+              <p className={`text-xs font-bold mt-1 ${t.text}`}>×{t.multiplier} multiplicador</p>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5 text-primary" />
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground font-medium">Miembros activos</p>
-              <p className="text-2xl font-bold">{totalMembers}</p>
+              <p className="text-[11px] text-muted-foreground">Miembros</p>
+              <p className="text-xl font-bold">{totalMembers}</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-              <Star className="w-5 h-5 text-amber-600" />
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+              <Star className="w-4 h-4 text-amber-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground font-medium">Puntos en circulación</p>
-              <p className="text-2xl font-bold">{totalPoints.toLocaleString("es")}</p>
+              <p className="text-[11px] text-muted-foreground">En circulación</p>
+              <p className="text-xl font-bold">{totalPoints.toLocaleString("es")}</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-5 h-5 text-green-600" />
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-yellow-100 flex items-center justify-center shrink-0">
+              <span className="text-base">🥇</span>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground font-medium">Puntos otorgados (total)</p>
-              <p className="text-2xl font-bold">{totalLifetime.toLocaleString("es")}</p>
+              <p className="text-[11px] text-muted-foreground">Nivel Oro</p>
+              <p className="text-xl font-bold">{goldCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+              <span className="text-base">🥈</span>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground">Nivel Plata</p>
+              <p className="text-xl font-bold">{silverCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -211,8 +337,14 @@ export default function Loyalty() {
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div>
-              <CardTitle className="text-base flex items-center gap-2"><Trophy className="w-4 h-4 text-amber-500" /> Ranking de Clientes</CardTitle>
-              <CardDescription className="text-xs mt-0.5">Clientes con mayor acumulación de puntos</CardDescription>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-500" /> Ranking de Clientes
+                {tierFilter !== "all" && (
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TIERS[tierFilter as TierName].bg} ${TIERS[tierFilter as TierName].border} ${TIERS[tierFilter as TierName].text}`}>
+                    {TIERS[tierFilter as TierName].emoji} {TIERS[tierFilter as TierName].label}
+                  </span>
+                )}
+              </CardTitle>
             </div>
             <div className="sm:ml-auto relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -230,8 +362,9 @@ export default function Loyalty() {
           {!isLoading && filtered.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <Award className="w-10 h-10 mx-auto mb-3 opacity-20" />
-              <p className="text-sm font-medium">Sin miembros aún</p>
-              <p className="text-xs mt-1">Los puntos se acumularán automáticamente en las ventas</p>
+              <p className="text-sm font-medium">
+                {tierFilter !== "all" ? `Sin clientes en nivel ${TIERS[tierFilter as TierName]?.label}` : "Sin miembros aún"}
+              </p>
             </div>
           )}
           {filtered.length > 0 && (
@@ -239,63 +372,79 @@ export default function Loyalty() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/50 bg-muted/30">
-                    <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">#</th>
-                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Cliente</th>
+                    <th className="text-left px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-10">#</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Cliente / Nivel</th>
                     <th className="text-right px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Puntos</th>
-                    <th className="text-right px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Valor descuento</th>
-                    <th className="text-right px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Ganados</th>
-                    <th className="text-right px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Canjeados</th>
+                    <th className="text-right px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Desc. disponible</th>
+                    <th className="text-right px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden xl:table-cell">Progreso</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/30">
-                  {filtered.map((m, idx) => (
-                    <tr key={m.customerId} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-5 py-3 text-muted-foreground font-medium">
-                        {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : <span className="text-xs">{idx + 1}</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                            {m.customerName.charAt(0).toUpperCase()}
+                  {filtered.map((m, idx) => {
+                    const t = TIERS[m.tier] ?? TIERS.bronze;
+                    return (
+                      <tr key={m.customerId} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-5 py-3 text-muted-foreground font-medium text-center">
+                          {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : <span className="text-xs">{idx + 1}</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-9 h-9 rounded-full border-2 flex items-center justify-center text-sm font-bold shrink-0 ${t.border} ${t.bg} ${t.text}`}>
+                              {m.customerName.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-sm">{m.customerName}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <TierBadge tier={m.tier} size="xs" />
+                                {m.tierMultiplier > 1 && (
+                                  <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
+                                    <Zap className="w-2.5 h-2.5" />×{m.tierMultiplier}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-sm">{m.customerName}</p>
-                            {m.customerEmail && <p className="text-[11px] text-muted-foreground">{m.customerEmail}</p>}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Badge variant="outline" className="font-bold text-primary border-primary/30 bg-primary/5">
+                            <Star className="w-3 h-3 mr-1 text-amber-500" />
+                            {m.points.toLocaleString("es")}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-green-700 hidden lg:table-cell">
+                          {formatCurrency(m.discountValue, currencySymbol)}
+                        </td>
+                        <td className="px-4 py-3 hidden xl:table-cell w-48">
+                          {m.nextTier ? (
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] text-muted-foreground">
+                                <span>{m.progressToNext}%</span>
+                                <span>{m.pointsToNext.toLocaleString("es")} para {m.nextTier.label}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className={`h-full rounded-full ${t.bar}`} style={{ width: `${m.progressToNext}%` }} />
+                              </div>
+                            </div>
+                          ) : (
+                            <span className={`text-[11px] font-semibold ${t.text}`}>✨ Nivel máximo</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-primary hover:bg-primary/10"
+                              onClick={() => setHistoryFor({ id: m.customerId, name: m.customerName })}>
+                              <History className="w-3.5 h-3.5 mr-1" /> Historial
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs hover:bg-muted"
+                              onClick={() => handleAdjust(m)}>
+                              <Gift className="w-3.5 h-3.5 mr-1" /> Ajustar
+                            </Button>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Badge variant="outline" className="font-bold text-primary border-primary/30 bg-primary/5 text-sm px-2.5">
-                          <Star className="w-3 h-3 mr-1 text-amber-500" />
-                          {m.points.toLocaleString("es")}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-green-700">{formatCurrency(m.discountValue, currencySymbol)}</td>
-                      <td className="px-4 py-3 text-right text-muted-foreground text-xs">{m.lifetimeEarned.toLocaleString("es")}</td>
-                      <td className="px-4 py-3 text-right text-muted-foreground text-xs">{m.lifetimeRedeemed.toLocaleString("es")}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs text-primary hover:bg-primary/10"
-                            onClick={() => setHistoryFor(m.customerId)}
-                          >
-                            <History className="w-3.5 h-3.5 mr-1" /> Ver historial
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs hover:bg-muted"
-                            onClick={() => handleAdjust(m)}
-                          >
-                            <Gift className="w-3.5 h-3.5 mr-1" /> Ajustar
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -303,8 +452,12 @@ export default function Loyalty() {
         </CardContent>
       </Card>
 
-      {historyFor !== null && (
-        <HistoryPanel customerId={historyFor} onClose={() => setHistoryFor(null)} />
+      {historyFor && (
+        <HistoryPanel
+          customerId={historyFor.id}
+          customerName={historyFor.name}
+          onClose={() => setHistoryFor(null)}
+        />
       )}
     </div>
   );

@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote, Star, Gift } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote, Star, Gift, Zap } from "lucide-react";
+import { TierBadge } from "@/pages/loyalty";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { BoletaModal } from "@/components/boleta-modal";
@@ -93,6 +94,9 @@ export default function POS() {
   const customerIdNum = customerId !== "none" ? parseInt(customerId) : null;
   const { data: loyaltyBalance, refetch: refetchBalance } = useQuery<{
     points: number; discountValue: number; redemptionRate: number; pointsPerUnit: number; loyaltyEnabled: boolean;
+    tier: string; tierLabel: string; tierMultiplier: number; tierColor: string;
+    nextTier: { name: string; label: string; min: number } | null;
+    progressToNext: number; pointsToNext: number;
   }>({
     queryKey: ["/api/loyalty/balance", customerIdNum],
     queryFn: () => apiFetch(`/api/loyalty/balance/${customerIdNum}`),
@@ -733,9 +737,17 @@ export default function POS() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold truncate">{selectedCustomer.name}</p>
                     {loyaltyBalance?.loyaltyEnabled ? (
-                      <p className="text-[10px] text-amber-600 font-semibold flex items-center gap-0.5">
-                        <Star className="w-2.5 h-2.5" /> {loyaltyBalance.points.toLocaleString("es")} puntos
-                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <TierBadge tier={loyaltyBalance.tier} size="xs" />
+                        <p className="text-[10px] text-amber-600 font-semibold flex items-center gap-0.5">
+                          <Star className="w-2.5 h-2.5" /> {loyaltyBalance.points.toLocaleString("es")} pts
+                        </p>
+                        {loyaltyBalance.tierMultiplier > 1 && (
+                          <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
+                            <Zap className="w-2.5 h-2.5 text-yellow-500" />×{loyaltyBalance.tierMultiplier}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <p className="text-[10px] text-muted-foreground truncate">{(selectedCustomer as any).email || ""}</p>
                     )}

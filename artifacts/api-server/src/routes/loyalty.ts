@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   db, customerPointsTable, pointsTransactionsTable,
   businessSettingsTable, customersTable,
+  TIER_CONFIG, getTierForLifetime,
 } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { verifyToken, AuthRequest } from "../middlewares/auth";
@@ -9,7 +10,7 @@ import { verifyToken, AuthRequest } from "../middlewares/auth";
 const router = Router();
 router.use(verifyToken);
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 async function getSettings() {
   const [s] = await db.select().from(businessSettingsTable).limit(1);
@@ -25,9 +26,26 @@ async function getOrCreateBalance(tx: any, customerId: number) {
   if (row) return row;
   const [created] = await tx
     .insert(customerPointsTable)
-    .values({ customerId, points: 0, lifetimeEarned: 0, lifetimeRedeemed: 0 })
+    .values({ customerId, points: 0, lifetimeEarned: 0, lifetimeRedeemed: 0, tier: "bronze" })
     .returning();
   return created;
+}
+
+function buildTierInfo(tier: string, lifetimeEarned: number) {
+  const t = TIER_CONFIG[tier as keyof typeof TIER_CONFIG] ?? TIER_CONFIG.bronze;
+  const next =
+    tier === "bronze" ? TIER_CONFIG.silver :
+    tier === "silver" ? TIER_CONFIG.gold   : null;
+
+  return {
+    tier,
+    tierLabel: t.label,
+    tierMultiplier: t.multiplier,
+    tierColor: t.color,
+    nextTier: next ? { name: tier === "bronze" ? "silver" : "gold", label: next.label, min: next.min } : null,
+    progressToNext: next ? Math.min(100, Math.floor((lifetimeEarned / next.min) * 100)) : 100,
+    pointsToNext: next ? Math.max(0, next.min - lifetimeEarned) : 0,
+  };
 }
 
 // ── Award points (called internally from sales route) ─────────────────────────
@@ -37,28 +55,49 @@ export async function awardPointsForSale(
   totalAmount: number,
   pointsPerUnit: number
 ) {
-  const earned = Math.floor(totalAmount * pointsPerUnit);
-  if (earned <= 0) return 0;
-
-  await db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const bal = await getOrCreateBalance(tx, customerId);
+    const currentTier = (bal.tier as keyof typeof TIER_CONFIG) ?? "bronze";
+    const multiplier = TIER_CONFIG[currentTier]?.multiplier ?? 1;
+
+    const baseEarned = Math.floor(totalAmount * pointsPerUnit);
+    if (baseEarned <= 0) return 0;
+
+    const earned = Math.floor(baseEarned * multiplier);
+    const newLifetime = bal.lifetimeEarned + earned;
+    const newTier = getTierForLifetime(newLifetime);
+    const tieredUp = newTier !== currentTier;
+
     await tx
       .update(customerPointsTable)
       .set({
         points: bal.points + earned,
-        lifetimeEarned: bal.lifetimeEarned + earned,
+        lifetimeEarned: newLifetime,
+        tier: newTier,
       })
       .where(eq(customerPointsTable.customerId, customerId));
+
+    const noteBase = `Puntos ganados por venta #${String(saleId).padStart(6, "0")}`;
+    const noteMultiplier = multiplier > 1 ? ` (×${multiplier} nivel ${TIER_CONFIG[currentTier].label})` : "";
     await tx.insert(pointsTransactionsTable).values({
       customerId,
       delta: earned,
       type: "earned",
       saleId,
-      notes: `Puntos ganados por venta #${String(saleId).padStart(6, "0")}`,
+      notes: noteBase + noteMultiplier,
     });
-  });
 
-  return earned;
+    if (tieredUp) {
+      await tx.insert(pointsTransactionsTable).values({
+        customerId,
+        delta: 0,
+        type: "tier_up",
+        notes: `¡Nivel alcanzado: ${TIER_CONFIG[newTier].label}! Multiplicador ×${TIER_CONFIG[newTier].multiplier}`,
+      });
+    }
+
+    return { earned, tieredUp, newTier };
+  });
 }
 
 // ── GET /api/loyalty/balance/:customerId ──────────────────────────────────────
@@ -73,18 +112,20 @@ router.get("/balance/:customerId", async (req, res) => {
       .limit(1);
 
     const points = bal?.points ?? 0;
+    const lifetimeEarned = bal?.lifetimeEarned ?? 0;
+    const tier = bal?.tier ?? "bronze";
     const redemptionRate = Number(settings?.pointsRedemptionRate ?? 0.01);
-    const discountValue = +(points * redemptionRate).toFixed(2);
 
     res.json({
       customerId,
       points,
-      lifetimeEarned: bal?.lifetimeEarned ?? 0,
+      lifetimeEarned,
       lifetimeRedeemed: bal?.lifetimeRedeemed ?? 0,
-      discountValue,
+      discountValue: +(points * redemptionRate).toFixed(2),
       redemptionRate,
       pointsPerUnit: settings?.pointsPerUnit ?? 1,
       loyaltyEnabled: settings?.loyaltyEnabled ?? false,
+      ...buildTierInfo(tier, lifetimeEarned),
     });
   } catch (err) {
     req.log.error({ err }, "GetLoyaltyBalance error");
@@ -119,7 +160,7 @@ router.get("/history/:customerId", async (req, res) => {
   }
 });
 
-// ── GET /api/loyalty/leaderboard — all customers with points ─────────────────
+// ── GET /api/loyalty/leaderboard ──────────────────────────────────────────────
 router.get("/leaderboard", async (req, res) => {
   try {
     const rows = await db
@@ -148,6 +189,7 @@ router.get("/leaderboard", async (req, res) => {
         lifetimeEarned: r.cp.lifetimeEarned,
         lifetimeRedeemed: r.cp.lifetimeRedeemed,
         discountValue: +(r.cp.points * redemptionRate).toFixed(2),
+        ...buildTierInfo(r.cp.tier ?? "bronze", r.cp.lifetimeEarned),
       }))
     );
   } catch (err) {
@@ -156,8 +198,21 @@ router.get("/leaderboard", async (req, res) => {
   }
 });
 
+// ── GET /api/loyalty/tiers — static tier info ─────────────────────────────────
+router.get("/tiers", async (_req, res) => {
+  res.json(
+    Object.entries(TIER_CONFIG).map(([key, t]) => ({
+      name: key,
+      label: t.label,
+      min: t.min,
+      max: t.max,
+      multiplier: t.multiplier,
+      color: t.color,
+    }))
+  );
+});
+
 // ── POST /api/loyalty/redeem ──────────────────────────────────────────────────
-// Body: { customerId, pointsToRedeem }
 router.post("/redeem", async (req: AuthRequest, res) => {
   const { customerId, pointsToRedeem } = req.body ?? {};
   if (!customerId || !pointsToRedeem || pointsToRedeem <= 0) {
@@ -193,7 +248,7 @@ router.post("/redeem", async (req: AuthRequest, res) => {
         customerId,
         delta: -pointsToRedeem,
         type: "redeemed",
-        notes: `Canje de ${pointsToRedeem} puntos por descuento de ${discountAmount}`,
+        notes: `Canje de ${pointsToRedeem} puntos — descuento ${discountAmount}`,
       });
 
       return {
@@ -214,7 +269,7 @@ router.post("/redeem", async (req: AuthRequest, res) => {
   }
 });
 
-// ── POST /api/loyalty/adjust ─ manual admin adjustment ────────────────────────
+// ── POST /api/loyalty/adjust ──────────────────────────────────────────────────
 router.post("/adjust", async (req: AuthRequest, res) => {
   const { customerId, delta, notes } = req.body ?? {};
   if (!customerId || delta === undefined) {
@@ -226,10 +281,12 @@ router.post("/adjust", async (req: AuthRequest, res) => {
     const result = await db.transaction(async (tx) => {
       const bal = await getOrCreateBalance(tx, customerId);
       const newPoints = Math.max(0, bal.points + delta);
+      const newLifetime = delta > 0 ? bal.lifetimeEarned + delta : bal.lifetimeEarned;
+      const newTier = getTierForLifetime(newLifetime);
 
       await tx
         .update(customerPointsTable)
-        .set({ points: newPoints })
+        .set({ points: newPoints, lifetimeEarned: newLifetime, tier: newTier })
         .where(eq(customerPointsTable.customerId, customerId));
 
       await tx.insert(pointsTransactionsTable).values({
@@ -239,7 +296,7 @@ router.post("/adjust", async (req: AuthRequest, res) => {
         notes: notes ?? `Ajuste manual: ${delta > 0 ? "+" : ""}${delta} puntos`,
       });
 
-      return { customerId, points: newPoints, delta };
+      return { customerId, points: newPoints, delta, tier: newTier };
     });
 
     res.json(result);
