@@ -13,6 +13,7 @@ import businessSettingsRouter from "./business-settings";
 import paymentMethodsRouter from "./payment-methods";
 import usersManagementRouter from "./users-management";
 import reportsRouter from "./reports";
+import loyaltyRouter from "./loyalty";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use("/business-settings", businessSettingsRouter);
 router.use("/payment-methods", paymentMethodsRouter);
 router.use("/users", usersManagementRouter);
 router.use("/reports", reportsRouter);
+router.use("/loyalty", loyaltyRouter);
 
 export default router;

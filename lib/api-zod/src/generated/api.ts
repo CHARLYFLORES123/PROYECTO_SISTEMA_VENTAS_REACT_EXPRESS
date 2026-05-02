@@ -694,6 +694,9 @@ export const GetBusinessSettingsResponse = zod.object({
   logoUrl: zod.string().nullish(),
   currency: zod.string(),
   currencySymbol: zod.string(),
+  loyaltyEnabled: zod.boolean(),
+  pointsPerUnit: zod.number(),
+  pointsRedemptionRate: zod.number(),
   updatedAt: zod.string(),
 });
 
@@ -709,6 +712,9 @@ export const UpdateBusinessSettingsBody = zod.object({
   logoUrl: zod.string().nullish(),
   currency: zod.string(),
   currencySymbol: zod.string(),
+  loyaltyEnabled: zod.boolean().optional(),
+  pointsPerUnit: zod.number().optional(),
+  pointsRedemptionRate: zod.number().optional(),
 });
 
 export const UpdateBusinessSettingsResponse = zod.object({
@@ -721,6 +727,9 @@ export const UpdateBusinessSettingsResponse = zod.object({
   logoUrl: zod.string().nullish(),
   currency: zod.string(),
   currencySymbol: zod.string(),
+  loyaltyEnabled: zod.boolean(),
+  pointsPerUnit: zod.number(),
+  pointsRedemptionRate: zod.number(),
   updatedAt: zod.string(),
 });
 

@@ -374,6 +374,9 @@ export interface BusinessSettings {
   logoUrl?: string | null;
   currency: string;
   currencySymbol: string;
+  loyaltyEnabled: boolean;
+  pointsPerUnit: number;
+  pointsRedemptionRate: number;
   updatedAt: string;
 }
 
@@ -391,6 +394,9 @@ export interface UpdateBusinessSettingsBody {
   logoUrl?: string | null;
   currency: string;
   currencySymbol: string;
+  loyaltyEnabled?: boolean;
+  pointsPerUnit?: number;
+  pointsRedemptionRate?: number;
 }
 
 export interface PaymentMethod {

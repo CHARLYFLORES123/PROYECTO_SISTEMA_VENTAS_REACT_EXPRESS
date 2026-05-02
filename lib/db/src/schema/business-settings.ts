@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -12,6 +12,10 @@ export const businessSettingsTable = pgTable("business_settings", {
   logoUrl: text("logo_url"),
   currency: varchar("currency", { length: 10 }).notNull().default("BOB"),
   currencySymbol: varchar("currency_symbol", { length: 10 }).notNull().default("Bs"),
+  // Loyalty / points
+  loyaltyEnabled: boolean("loyalty_enabled").notNull().default(false),
+  pointsPerUnit: integer("points_per_unit").notNull().default(1),
+  pointsRedemptionRate: numeric("points_redemption_rate", { precision: 8, scale: 4 }).notNull().default("0.01"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

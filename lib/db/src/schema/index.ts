@@ -8,3 +8,4 @@ export * from "./sales";
 export * from "./quotes";
 export * from "./business-settings";
 export * from "./payment-methods";
+export * from "./loyalty";

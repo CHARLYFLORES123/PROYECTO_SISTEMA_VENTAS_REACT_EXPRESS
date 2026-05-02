@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Building2,
   LockKeyhole,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/currency-context";
@@ -57,6 +58,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/customers", label: "Clientes", icon: Users },
       { href: "/suppliers", label: "Proveedores", icon: Truck },
+      { href: "/loyalty", label: "Fidelización", icon: Star },
     ],
   },
 ];
@@ -70,7 +72,6 @@ const ADMIN_GROUP = {
   ],
 };
 
-// Flat list for active detection
 const ALL_NAV_ITEMS = [
   ...NAV_GROUPS.flatMap(g => g.items),
   ...ADMIN_GROUP.items,

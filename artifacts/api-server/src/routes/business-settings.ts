@@ -12,6 +12,9 @@ function fmt(s: any) {
     id: s.id, companyName: s.companyName, rucNit: s.rucNit ?? null,
     phone: s.phone ?? null, email: s.email ?? null, address: s.address ?? null,
     logoUrl: s.logoUrl ?? null, currency: s.currency, currencySymbol: s.currencySymbol,
+    loyaltyEnabled: s.loyaltyEnabled ?? false,
+    pointsPerUnit: s.pointsPerUnit ?? 1,
+    pointsRedemptionRate: Number(s.pointsRedemptionRate ?? 0.01),
     updatedAt: s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt,
   };
 }

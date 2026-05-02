@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { db, salesTable, saleDetailsTable, productsTable, customersTable, usersTable } from "@workspace/db";
+import { db, salesTable, saleDetailsTable, productsTable, customersTable, usersTable, businessSettingsTable } from "@workspace/db";
 import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { CreateSaleBody } from "@workspace/api-zod";
 import { verifyToken, AuthRequest } from "../middlewares/auth";
+import { awardPointsForSale } from "./loyalty";
 
 const router = Router();
 router.use(verifyToken);
@@ -117,7 +118,23 @@ router.post("/", async (req: AuthRequest, res) => {
       customerName = c?.name ?? null;
     }
 
-    res.status(201).json(formatSale(result, customerName));
+    // Award loyalty points if enabled
+    try {
+      const [settings] = await db.select().from(businessSettingsTable).limit(1);
+      if (settings?.loyaltyEnabled && customerId) {
+        await awardPointsForSale(customerId, result.id, Number(result.total), settings.pointsPerUnit);
+      }
+    } catch (pointsErr) {
+      req.log.warn({ err: pointsErr }, "Failed to award loyalty points (non-fatal)");
+    }
+
+    const pointsEarned = (() => {
+      try {
+        return 0; // points are awarded async above; return 0 as placeholder
+      } catch { return 0; }
+    })();
+
+    res.status(201).json({ ...formatSale(result, customerName), pointsEarned });
   } catch (err) {
     req.log.error({ err }, "CreateSale error");
     res.status(500).json({ message: "Error interno" });

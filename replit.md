@@ -22,7 +22,7 @@ lib/
   api-client-react/ — TanStack Query hooks generated from OpenAPI
 ```
 
-## Database Schema (12 tables)
+## Database Schema (14 tables)
 
 - `users` — admin accounts (email unique, bcryptjs password_hash, role: admin|vendedor)
 - `categories` — product categories
@@ -34,8 +34,10 @@ lib/
 - `sale_details` — line items (productName snapshot, quantity, unitPrice)
 - `quotes` — quote/proforma header (status: pendiente|convertida|vencida, validUntil, convertedSaleId)
 - `quote_details` — quote line items
-- `business_settings` — company name, RUC/NIT, logo, currency (auto-created on first GET)
+- `business_settings` — company name, RUC/NIT, logo, currency, loyalty config (loyaltyEnabled, pointsPerUnit, pointsRedemptionRate)
 - `payment_methods` — configurable payment methods (name, description, isActive)
+- `customer_points` — points balance per customer (points, lifetimeEarned, lifetimeRedeemed)
+- `points_transactions` — points history (delta, type: earned|redeemed|adjusted, saleId, notes)
 
 ## API Endpoints (all under /api, JWT required except auth)
 
@@ -47,7 +49,8 @@ lib/
 - `GET|POST|PUT|DELETE /suppliers`
 - `GET|POST /sales`, `GET /sales/:id`, `POST /sales/:id/cancel`
 - `GET|POST /quotes`, `GET /quotes/:id`, `POST /quotes/:id/convert`
-- `GET|PUT /business-settings` (auto-init default on first GET)
+- `GET|PUT /business-settings` (auto-init default on first GET; includes loyaltyEnabled, pointsPerUnit, pointsRedemptionRate)
+- `GET /loyalty/leaderboard`, `GET /loyalty/balance/:id`, `GET /loyalty/history/:id`, `POST /loyalty/redeem`, `POST /loyalty/adjust`
 - `GET|POST|PUT|DELETE /payment-methods`
 - `GET|POST|PUT|DELETE /users` (user management)
 - `GET /dashboard/stats`, `/dashboard/sales-chart`, `/dashboard/top-products`, `/dashboard/recent-sales`
@@ -64,22 +67,24 @@ Implemented full Perfisoft visual redesign:
 - **POS:** Category chip filters (pill-shaped), product grid with stock badges, cart panel with thumbnails
 - **Sales:** Formatted sale numbers (#000001), action menu (view/cancel), export to Excel, filter panel
 
-## Frontend Pages (17 total)
+## Frontend Pages (19 total)
 
 - `/` — Login (JWT stored in localStorage as "pos_token")
 - `/register` — Register
 - `/dashboard` — 4 KPI cards + area chart + top products + top sellers + recent sales table
-- `/pos` — Point of Sale (category chips filter, product grid, cart panel, pill pay button)
+- `/pos` — Point of Sale (category chips filter, product grid, cart panel, pill pay button, loyalty points display + redemption)
 - `/products` — CRUD with category/brand filter, imageUrl, low stock badge
 - `/categories` — CRUD
-- `/customers` — CRUD with NIT/CI
+- `/customers` — CRUD with NIT/CI + "Extracto" button
+- `/customers/:id/statement` — Customer account statement with PDF export
 - `/sales` — Sales history with date/customer/user filter
 - `/sales/:id` — Sale detail view
 - `/inventory` — Inventory report + Excel download (SheetJS)
 - `/brands` — Brand management CRUD
 - `/suppliers` — Supplier management CRUD
 - `/quotes` — Quotes/proformas with convert-to-sale action
-- `/settings` — Business settings (company name, RUC, logo, currency)
+- `/loyalty` — Loyalty/points program leaderboard with history + manual adjust
+- `/settings` — Business settings + loyalty program configuration (toggle, pointsPerUnit, redemptionRate)
 - `/payment-methods` — Payment method configuration with active toggle
 - `/users` — User management CRUD (admin/vendedor roles)
 - `/reports` — Sales by user, by category (charts + export), stock alerts
@@ -92,6 +97,7 @@ Implemented full Perfisoft visual redesign:
 - Quote convert-to-sale: validates stock, creates sale transaction, marks quote as "convertida"
 - Business settings: auto-creates default row on first GET if none exists
 - Currency: dynamic from business_settings (default BOB / Bs), propagated via CurrencyContext
+- Loyalty: `pointsPerUnit` points earned per currency unit of `total`; `pointsRedemptionRate` = value in currency per point; redemption is transactional (deducted before sale creation); points awarded non-fatally after sale; manual adjust available from /loyalty page
 
 ## Demo Credentials
 

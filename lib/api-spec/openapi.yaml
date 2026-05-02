@@ -1747,9 +1747,15 @@ components:
           type: string
         currencySymbol:
           type: string
+        loyaltyEnabled:
+          type: boolean
+        pointsPerUnit:
+          type: integer
+        pointsRedemptionRate:
+          type: number
         updatedAt:
           type: string
-      required: [id, companyName, currency, currencySymbol, updatedAt]
+      required: [id, companyName, currency, currencySymbol, loyaltyEnabled, pointsPerUnit, pointsRedemptionRate, updatedAt]
 
     UpdateBusinessSettingsBody:
       type: object
@@ -1770,6 +1776,12 @@ components:
           type: string
         currencySymbol:
           type: string
+        loyaltyEnabled:
+          type: boolean
+        pointsPerUnit:
+          type: integer
+        pointsRedemptionRate:
+          type: number
       required: [companyName, currency, currencySymbol]
 
     # PAYMENT METHODS

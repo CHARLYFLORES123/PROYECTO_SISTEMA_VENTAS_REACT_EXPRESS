@@ -1,15 +1,27 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { useGetProducts, useGetCustomers, useCreateSale, useGetCategories, useGetPaymentMethods } from "@workspace/api-client-react";
+import { useGetProducts, useGetCustomers, useCreateSale, useGetCategories, useGetPaymentMethods, useGetBusinessSettings } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote, Star, Gift } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { BoletaModal } from "@/components/boleta-modal";
 import { Toast, Swal } from "@/lib/swal";
+import { getToken } from "@/lib/auth";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+async function apiFetch(path: string, opts: RequestInit = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    ...opts,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}`, ...(opts.headers ?? {}) },
+  });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error((d as any).message ?? "Error"); }
+  return res.json();
+}
 
 interface CartItem {
   productId: number;
@@ -60,6 +72,8 @@ export default function POS() {
   const [pendingQty, setPendingQty] = useState(1);
   const [suspendedSales, setSuspendedSales] = useState<SuspendedSale[]>([]);
   const [showSuspended, setShowSuspended] = useState(false);
+  const [pointsToRedeem, setPointsToRedeem] = useState(0);
+  const [redeemingPoints, setRedeemingPoints] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -72,7 +86,21 @@ export default function POS() {
   const { data: customers } = useGetCustomers();
   const { data: categories } = useGetCategories();
   const { data: paymentMethods } = useGetPaymentMethods();
+  const { data: settings } = useGetBusinessSettings();
   const createSale = useCreateSale();
+
+  // Loyalty balance for selected customer
+  const customerIdNum = customerId !== "none" ? parseInt(customerId) : null;
+  const { data: loyaltyBalance, refetch: refetchBalance } = useQuery<{
+    points: number; discountValue: number; redemptionRate: number; pointsPerUnit: number; loyaltyEnabled: boolean;
+  }>({
+    queryKey: ["/api/loyalty/balance", customerIdNum],
+    queryFn: () => apiFetch(`/api/loyalty/balance/${customerIdNum}`),
+    enabled: customerIdNum !== null && !!(settings as any)?.loyaltyEnabled,
+  });
+
+  // Reset points when customer changes
+  useEffect(() => { setPointsToRedeem(0); }, [customerId]);
 
   const activePaymentMethods = useMemo(() => {
     if (!paymentMethods || paymentMethods.length === 0) return ["Efectivo", "Tarjeta", "Transferencia"];
@@ -96,8 +124,12 @@ export default function POS() {
     acc + i.quantity * i.unitPrice * (1 - i.discount / 100), 0), [cart]);
   const totalDiscount = useMemo(() => cart.reduce((acc, i) =>
     acc + i.quantity * i.unitPrice * (i.discount / 100), 0), [cart]);
-  const iva = subtotal * 0.13;
-  const total = subtotal + iva;
+  const loyaltyDiscount = useMemo(() => {
+    if (!pointsToRedeem || !loyaltyBalance) return 0;
+    return +(pointsToRedeem * loyaltyBalance.redemptionRate).toFixed(2);
+  }, [pointsToRedeem, loyaltyBalance]);
+  const iva = (subtotal - loyaltyDiscount) * 0.13;
+  const total = Math.max(0, subtotal - loyaltyDiscount + iva);
 
   const addToCart = (product: any, qty = 1) => {
     setCart(prev => {
@@ -289,25 +321,44 @@ export default function POS() {
     Toast.fire({ icon: "success", title: `✓ ${product.name}`, text: qty > 1 ? `${qty} unidades añadidas` : "Añadido al carrito" });
   }, [products, pendingQty]);
 
-  const processSale = () => {
+  const processSale = async () => {
     if (cart.length === 0) return;
-    // Snapshot cart for the modal (in case cart clears before modal opens)
     const cartSnapshot = [...cart];
     const customerIdSnapshot = customerId;
     const paymentMethodSnapshot = paymentMethod;
-    const notesSnapshot = notes;
+    const loyaltyDiscountSnapshot = loyaltyDiscount;
+    const pointsToRedeemSnapshot = pointsToRedeem;
     const cashReceivedSnapshot = cashReceived;
+
+    // If redeeming points, deduct them first
+    if (pointsToRedeemSnapshot > 0 && customerIdSnapshot !== "none") {
+      setRedeemingPoints(true);
+      try {
+        await apiFetch("/api/loyalty/redeem", {
+          method: "POST",
+          body: JSON.stringify({ customerId: parseInt(customerIdSnapshot), pointsToRedeem: pointsToRedeemSnapshot }),
+        });
+      } catch (err: any) {
+        setRedeemingPoints(false);
+        Swal.fire({ icon: "error", title: "Error al canjear puntos", text: err.message, confirmButtonColor: "#4F46E5" });
+        return;
+      }
+      setRedeemingPoints(false);
+    }
+
+    const notesWithPoints = loyaltyDiscountSnapshot > 0
+      ? [notes, `Descuento por puntos: ${formatCurrency(loyaltyDiscountSnapshot, currencySymbol)} (${pointsToRedeemSnapshot} pts)`].filter(Boolean).join(" | ")
+      : (notes || null);
 
     createSale.mutate({
       data: {
         customerId: customerIdSnapshot === "none" ? null : parseInt(customerIdSnapshot),
         paymentMethod: paymentMethodSnapshot,
-        notes: notesSnapshot || null,
+        notes: notesWithPoints,
         items: cartSnapshot.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
       },
     }, {
       onSuccess: (sale) => {
-        // Build completed sale for boleta modal, reconstructing details from cart snapshot
         const saleForModal: CompletedSaleForModal = {
           id: sale.id,
           customerName: selectedCustomer?.name ?? null,
@@ -317,7 +368,7 @@ export default function POS() {
           total: sale.total,
           paymentMethod: sale.paymentMethod,
           status: sale.status,
-          notes: notesSnapshot || null,
+          notes: notesWithPoints,
           createdAt: sale.createdAt,
           details: cartSnapshot.map((item, idx) => ({
             id: idx + 1,
@@ -333,14 +384,21 @@ export default function POS() {
         setCustomerSearch("");
         setNotes("");
         setCashReceived("");
+        setPointsToRedeem(0);
         if (paymentMethodSnapshot === "Efectivo" && cashReceivedSnapshot) {
           const change = parseFloat(cashReceivedSnapshot) - sale.total;
           if (change > 0) {
             Toast.fire({ icon: "success", title: "Cambio a entregar", text: formatCurrency(change, currencySymbol), timer: 4000 });
           }
         }
+        // Show loyalty earned notification
+        if ((sale as any).pointsEarned > 0) {
+          Toast.fire({ icon: "success", title: `+${(sale as any).pointsEarned} puntos acumulados`, timer: 3000 });
+        }
         queryClient.invalidateQueries({ queryKey: ["/api/products"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/loyalty/balance", parseInt(customerIdSnapshot)] });
+        queryClient.invalidateQueries({ queryKey: ["/api/loyalty/leaderboard"] });
       },
       onError: (err: any) => {
         Swal.fire({ icon: "error", title: "Error al procesar venta", text: err.message, confirmButtonColor: "#4F46E5" });
@@ -667,20 +725,79 @@ export default function POS() {
               <User className="w-3.5 h-3.5" /> Cliente
             </label>
             {selectedCustomer ? (
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-primary/5 border border-primary/20">
-                <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                  {selectedCustomer.name.charAt(0).toUpperCase()}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-primary/5 border border-primary/20">
+                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                    {selectedCustomer.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold truncate">{selectedCustomer.name}</p>
+                    {loyaltyBalance?.loyaltyEnabled ? (
+                      <p className="text-[10px] text-amber-600 font-semibold flex items-center gap-0.5">
+                        <Star className="w-2.5 h-2.5" /> {loyaltyBalance.points.toLocaleString("es")} puntos
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground truncate">{(selectedCustomer as any).email || ""}</p>
+                    )}
+                  </div>
+                  <button
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    onClick={() => { setCustomerId("none"); setCustomerSearch(""); }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold truncate">{selectedCustomer.name}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{(selectedCustomer as any).email || ""}</p>
-                </div>
-                <button
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                  onClick={() => { setCustomerId("none"); setCustomerSearch(""); }}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+
+                {/* Loyalty redemption panel */}
+                {loyaltyBalance?.loyaltyEnabled && loyaltyBalance.points > 0 && cart.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-semibold text-amber-800 flex items-center gap-1">
+                        <Gift className="w-3 h-3" /> Canjear puntos
+                      </p>
+                      {pointsToRedeem > 0 && (
+                        <button onClick={() => setPointsToRedeem(0)} className="text-[10px] text-amber-600 hover:text-amber-800 underline">
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {[100, 200, 500].filter(v => v <= loyaltyBalance.points).map(pts => {
+                        const disc = +(pts * loyaltyBalance.redemptionRate).toFixed(2);
+                        return (
+                          <button
+                            key={pts}
+                            onClick={() => setPointsToRedeem(pointsToRedeem === pts ? 0 : pts)}
+                            className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all flex-1 ${
+                              pointsToRedeem === pts
+                                ? "bg-amber-500 text-white border-amber-500"
+                                : "bg-white text-amber-700 border-amber-300 hover:bg-amber-100"
+                            }`}
+                          >
+                            {pts}pts<br /><span className="text-[9px] font-normal">-{formatCurrency(disc, currencySymbol)}</span>
+                          </button>
+                        );
+                      })}
+                      {loyaltyBalance.points >= 1000 && (
+                        <button
+                          onClick={() => setPointsToRedeem(pointsToRedeem === loyaltyBalance.points ? 0 : loyaltyBalance.points)}
+                          className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all flex-1 ${
+                            pointsToRedeem === loyaltyBalance.points
+                              ? "bg-amber-500 text-white border-amber-500"
+                              : "bg-white text-amber-700 border-amber-300 hover:bg-amber-100"
+                          }`}
+                        >
+                          Todo<br /><span className="text-[9px] font-normal">-{formatCurrency(loyaltyBalance.discountValue, currencySymbol)}</span>
+                        </button>
+                      )}
+                    </div>
+                    {pointsToRedeem > 0 && (
+                      <p className="text-[11px] font-semibold text-amber-800 text-center bg-amber-100 rounded-lg py-1">
+                        Descuento: -{formatCurrency(loyaltyDiscount, currencySymbol)} ({pointsToRedeem} pts)
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <Select value={customerId} onValueChange={setCustomerId}>
@@ -791,9 +908,15 @@ export default function POS() {
                 <span className="font-semibold">-{formatCurrency(totalDiscount, currencySymbol)}</span>
               </div>
             )}
+            {loyaltyDiscount > 0 && (
+              <div className="flex justify-between text-xs text-amber-700">
+                <span className="flex items-center gap-1"><Star className="w-3 h-3" /> Puntos ({pointsToRedeem} pts)</span>
+                <span className="font-semibold">-{formatCurrency(loyaltyDiscount, currencySymbol)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Subtotal neto</span>
-              <span className="font-medium text-foreground">{formatCurrency(subtotal, currencySymbol)}</span>
+              <span className="font-medium text-foreground">{formatCurrency(subtotal - loyaltyDiscount, currencySymbol)}</span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>IVA (13%)</span>
