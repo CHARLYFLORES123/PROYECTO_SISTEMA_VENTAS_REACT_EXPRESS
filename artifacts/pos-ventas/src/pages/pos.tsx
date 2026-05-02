@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
+import { BoletaModal } from "@/components/boleta-modal";
 
 interface CartItem {
   productId: number;
@@ -20,6 +21,20 @@ interface CartItem {
   imageUrl?: string | null;
 }
 
+interface CompletedSaleForModal {
+  id: number;
+  customerName?: string | null;
+  userName?: string | null;
+  subtotal: number;
+  iva: number;
+  total: number;
+  paymentMethod: string;
+  status: string;
+  notes?: string | null;
+  createdAt: string;
+  details: { id: number; productName: string; quantity: number; unitPrice: number; subtotal: number }[];
+}
+
 export default function POS() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
@@ -28,6 +43,7 @@ export default function POS() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<string>("Efectivo");
   const [notes, setNotes] = useState("");
+  const [completedSale, setCompletedSale] = useState<CompletedSaleForModal | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currencySymbol } = useCurrency();
@@ -108,19 +124,42 @@ export default function POS() {
 
   const processSale = () => {
     if (cart.length === 0) return;
+    // Snapshot cart for the modal (in case cart clears before modal opens)
+    const cartSnapshot = [...cart];
+    const customerIdSnapshot = customerId;
+    const paymentMethodSnapshot = paymentMethod;
+    const notesSnapshot = notes;
+
     createSale.mutate({
       data: {
-        customerId: customerId === "none" ? null : parseInt(customerId),
-        paymentMethod,
-        notes: notes || null,
-        items: cart.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
+        customerId: customerIdSnapshot === "none" ? null : parseInt(customerIdSnapshot),
+        paymentMethod: paymentMethodSnapshot,
+        notes: notesSnapshot || null,
+        items: cartSnapshot.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
       },
     }, {
       onSuccess: (sale) => {
-        toast({
-          title: `✓ Venta #${String(sale.id).padStart(6, "0")} registrada`,
-          description: `Total: ${formatCurrency(sale.total, currencySymbol)}`,
-        });
+        // Build completed sale for boleta modal, reconstructing details from cart snapshot
+        const saleForModal: CompletedSaleForModal = {
+          id: sale.id,
+          customerName: selectedCustomer?.name ?? null,
+          userName: null,
+          subtotal: sale.subtotal,
+          iva: sale.iva,
+          total: sale.total,
+          paymentMethod: sale.paymentMethod,
+          status: sale.status,
+          notes: notesSnapshot || null,
+          createdAt: sale.createdAt,
+          details: cartSnapshot.map((item, idx) => ({
+            id: idx + 1,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            subtotal: item.quantity * item.unitPrice,
+          })),
+        };
+        setCompletedSale(saleForModal);
         setCart([]);
         setCustomerId("none");
         setCustomerSearch("");
@@ -408,6 +447,12 @@ export default function POS() {
           </button>
         </div>
       </div>
+
+      {/* Boleta Modal — appears after successful sale */}
+      <BoletaModal
+        sale={completedSale}
+        onClose={() => setCompletedSale(null)}
+      />
     </div>
   );
 }
