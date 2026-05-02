@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Sistema POS Ventas"
+version = "1.0.0"
+id = "artifacts/pos-ventas"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18739
+
+[services.development]
+run = "pnpm --filter @workspace/pos-ventas run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pos-ventas", "run", "build" ]
+publicDir = "artifacts/pos-ventas/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18739"
+BASE_PATH = "/"

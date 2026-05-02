@@ -356,11 +356,23 @@ export async function customFetch<T = unknown>(
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }
+  } else if (!headers.has("authorization")) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("pos_token") : null;
+    if (token) {
+      headers.set("authorization", `Bearer ${token}`);
+    }
   }
 
   const requestInfo = { method, url: resolveUrl(input) };
 
   const response = await fetch(input, { ...init, method, headers });
+
+  if (response.status === 401) {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("pos_token");
+      window.dispatchEvent(new Event("unauthorized"));
+    }
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

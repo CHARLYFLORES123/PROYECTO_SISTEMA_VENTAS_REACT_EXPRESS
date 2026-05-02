@@ -1,0 +1,35 @@
+"Actúa como un Desarrollador Full-Stack Senior y replica el sistema Perfisoft (ventas.perfisoft.com). No te limites a la estructura; quiero un sistema 100% funcional y listo para usar.
+
+1. Arquitectura de Datos (PostgreSQL):
+
+Crea las tablas con relaciones íntegras: Categories -> Products -> Sale_Details <- Sales <- Customers.
+
+Incluye campos técnicos: UUID para IDs, timestamps, stock_minimo, precio_compra, precio_venta y un campo NIT/CI en la tabla de Clientes.  
+
+2. Backend (Node.js/Express):
+
+Implementa un patrón de carpetas limpio (Controllers, Models, Routes, Middlewares).
+
+Seguridad: Usa bcrypt para contraseñas y jsonwebtoken para la sesión. Crea un middleware verifyToken para proteger todas las rutas de la API.
+
+Lógica de Ventas: Al procesar una venta, crea una transacción de base de datos que: 1. Registre la cabecera, 2. Registre el detalle, 3. Reste automáticamente el stock de los productos.
+
+3. Frontend (Angular 18 - Standalone & Signals):
+
+Layout: Crea una barra lateral (Sidebar) colapsable y una barra superior (Navbar) con perfil de usuario.
+
+Estado: Usa Angular Signals para manejar el estado del carrito de compras y la información del usuario logueado.
+
+Componentes POS: Diseña una vista de 'Punto de Venta' con un buscador reactivo que filtre productos por nombre o código de barras mientras escribes.
+
+Interceptores: Configura un auth.interceptor para adjuntar el token JWT en cada cabecera HTTP de forma automática.
+
+4. Funciones Pro:
+
+Dashboard: Genera gráficas dinámicas (puedes usar Chart.js) que muestren las ventas de los últimos 7 días.
+
+Excel: Implementa la librería exceljs o similar para descargar el reporte de inventario directamente desde la interfaz.
+
+IMPORTANTE: Este es un sistema de gestión comercial real, ignora cualquier concepto de aeropuertos. El sistema debe calcular el 13% de IVA en las ventas por defecto.  
+
+Por favor, procede a generar el código de extremo a extremo, empezando por la API de autenticación y el Layout principal de Angular."
