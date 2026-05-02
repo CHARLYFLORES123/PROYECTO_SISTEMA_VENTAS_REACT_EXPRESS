@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { BoletaModal } from "@/components/boleta-modal";
@@ -19,6 +19,17 @@ interface CartItem {
   unitPrice: number;
   stock: number;
   imageUrl?: string | null;
+}
+
+interface SuspendedSale {
+  id: string;
+  label: string;
+  cart: CartItem[];
+  customerId: string;
+  customerSearch: string;
+  paymentMethod: string;
+  notes: string;
+  suspendedAt: Date;
 }
 
 interface CompletedSaleForModal {
@@ -46,6 +57,8 @@ export default function POS() {
   const [completedSale, setCompletedSale] = useState<CompletedSaleForModal | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [pendingQty, setPendingQty] = useState(1);
+  const [suspendedSales, setSuspendedSales] = useState<SuspendedSale[]>([]);
+  const [showSuspended, setShowSuspended] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -129,6 +142,48 @@ export default function POS() {
 
   const removeFromCart = (productId: number) => {
     setCart(prev => prev.filter(i => i.productId !== productId));
+  };
+
+  const suspendSale = () => {
+    if (cart.length === 0) return;
+    const newSuspended: SuspendedSale = {
+      id: Date.now().toString(),
+      label: `Venta #${suspendedSales.length + 1} — ${cart.length} producto${cart.length !== 1 ? "s" : ""}`,
+      cart: [...cart],
+      customerId,
+      customerSearch,
+      paymentMethod,
+      notes,
+      suspendedAt: new Date(),
+    };
+    setSuspendedSales(prev => [...prev, newSuspended]);
+    setCart([]);
+    setCustomerId("none");
+    setCustomerSearch("");
+    setNotes("");
+    setPendingQty(1);
+    setBarcodeInput("");
+    toast({ title: "Venta suspendida", description: `${newSuspended.label} guardada. Puedes recuperarla cuando quieras.` });
+  };
+
+  const recoverSale = (id: string) => {
+    const suspended = suspendedSales.find(s => s.id === id);
+    if (!suspended) return;
+    // If current cart has items, auto-suspend it first
+    if (cart.length > 0) suspendSale();
+    setCart(suspended.cart);
+    setCustomerId(suspended.customerId);
+    setCustomerSearch(suspended.customerSearch);
+    setPaymentMethod(suspended.paymentMethod);
+    setNotes(suspended.notes);
+    setSuspendedSales(prev => prev.filter(s => s.id !== id));
+    setShowSuspended(false);
+    toast({ title: "Venta recuperada", description: suspended.label });
+  };
+
+  const discardSuspended = (id: string) => {
+    setSuspendedSales(prev => prev.filter(s => s.id !== id));
+    toast({ title: "Venta descartada" });
   };
 
   // Kiosk mode: auto-focus barcode input when cart is empty
@@ -376,11 +431,72 @@ export default function POS() {
           <ShoppingCart className="w-4 h-4 text-primary" />
           <h2 className="font-bold text-sm">Carrito</h2>
           {cart.length > 0 && (
-            <span className="ml-auto bg-primary text-white text-xs font-bold px-2 py-0.5 rounded-full">
+            <span className="bg-primary text-white text-xs font-bold px-2 py-0.5 rounded-full">
               {cart.reduce((s, i) => s + i.quantity, 0)}
             </span>
           )}
+          <div className="ml-auto flex items-center gap-1.5">
+            {/* Suspended sales toggle */}
+            {suspendedSales.length > 0 && (
+              <button
+                onClick={() => setShowSuspended(v => !v)}
+                className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${
+                  showSuspended
+                    ? "bg-amber-500 text-white border-amber-500"
+                    : "bg-amber-50 text-amber-600 border-amber-300 hover:bg-amber-100"
+                }`}
+                title="Ver ventas suspendidas"
+              >
+                <Clock className="w-3 h-3" />
+                {suspendedSales.length}
+              </button>
+            )}
+            {/* Suspend current cart */}
+            {cart.length > 0 && (
+              <button
+                onClick={suspendSale}
+                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-all"
+                title="Suspender venta"
+              >
+                <PauseCircle className="w-3.5 h-3.5" />
+                Pausar
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Suspended sales panel */}
+        {showSuspended && suspendedSales.length > 0 && (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 space-y-2">
+            <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" /> Ventas en espera
+            </p>
+            {suspendedSales.map(s => (
+              <div key={s.id} className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-amber-200 shadow-sm">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">{s.label}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {s.suspendedAt.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+                    {s.customerId !== "none" ? " · con cliente" : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => recoverSale(s.id)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 px-2 py-1 rounded-lg transition-colors shrink-0"
+                >
+                  <PlayCircle className="w-3.5 h-3.5" /> Recuperar
+                </button>
+                <button
+                  onClick={() => discardSuspended(s.id)}
+                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-destructive rounded-lg transition-colors shrink-0"
+                  title="Descartar"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Cart items */}
         <ScrollArea className="flex-1 px-4 py-3">
