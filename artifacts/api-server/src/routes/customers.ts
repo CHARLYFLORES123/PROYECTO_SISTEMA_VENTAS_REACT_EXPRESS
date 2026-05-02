@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, customersTable, salesTable } from "@workspace/db";
-import { eq, ilike, count } from "drizzle-orm";
+import { db, customersTable, salesTable, saleDetailsTable } from "@workspace/db";
+import { eq, ilike, count, sum, min, max, avg } from "drizzle-orm";
 import { CreateCustomerBody, GetCustomersQueryParams } from "@workspace/api-zod";
 import { verifyToken } from "../middlewares/auth";
 
@@ -90,6 +90,63 @@ router.put("/:id", async (req, res) => {
     res.json(formatCustomer(c));
   } catch (err) {
     req.log.error({ err }, "UpdateCustomer error");
+    res.status(500).json({ message: "Error interno" });
+  }
+});
+
+// GET /api/customers/:id/statement — full purchase history + stats
+router.get("/:id/statement", async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const [c] = await db.select().from(customersTable).where(eq(customersTable.id, id)).limit(1);
+    if (!c) { res.status(404).json({ message: "Cliente no encontrado" }); return; }
+
+    const stats = await db
+      .select({
+        totalSpent: sum(salesTable.total),
+        saleCount: count(salesTable.id),
+        averageTicket: avg(salesTable.total),
+        firstPurchase: min(salesTable.createdAt),
+        lastPurchase: max(salesTable.createdAt),
+      })
+      .from(salesTable)
+      .where(eq(salesTable.customerId, id));
+
+    const salesRows = await db
+      .select()
+      .from(salesTable)
+      .where(eq(salesTable.customerId, id))
+      .orderBy(salesTable.createdAt);
+
+    res.json({
+      id: c.id,
+      name: c.name,
+      nitCi: c.nitCi ?? null,
+      email: c.email ?? null,
+      phone: c.phone ?? null,
+      address: c.address ?? null,
+      totalSpent: Number(stats[0]?.totalSpent ?? 0),
+      saleCount: Number(stats[0]?.saleCount ?? 0),
+      averageTicket: Number(stats[0]?.averageTicket ?? 0),
+      firstPurchase: stats[0]?.firstPurchase instanceof Date
+        ? stats[0].firstPurchase.toISOString()
+        : (stats[0]?.firstPurchase ?? null),
+      lastPurchase: stats[0]?.lastPurchase instanceof Date
+        ? stats[0].lastPurchase.toISOString()
+        : (stats[0]?.lastPurchase ?? null),
+      sales: salesRows.map(s => ({
+        id: s.id,
+        createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+        paymentMethod: s.paymentMethod,
+        status: s.status,
+        subtotal: Number(s.subtotal),
+        iva: Number(s.iva),
+        total: Number(s.total),
+        notes: s.notes ?? null,
+      })),
+    });
+  } catch (err) {
+    req.log.error({ err }, "GetCustomerStatement error");
     res.status(500).json({ message: "Error interno" });
   }
 });

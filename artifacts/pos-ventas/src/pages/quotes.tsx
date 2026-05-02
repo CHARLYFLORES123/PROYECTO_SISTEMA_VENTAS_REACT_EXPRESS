@@ -6,6 +6,7 @@ import {
   useCreateQuote,
   useConvertQuoteToSale,
   getQuoteById,
+  useGetPaymentMethods,
 } from "@workspace/api-client-react";
 import { useGetBusinessSettings } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -103,6 +104,7 @@ export default function Quotes() {
   const [customerId, setCustomerId] = useState<string>("none");
   const [validUntil, setValidUntil] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("Efectivo");
   const [loadingQuoteId, setLoadingQuoteId] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
@@ -112,6 +114,7 @@ export default function Quotes() {
   const { data: products } = useGetProducts({ search });
   const { data: customers } = useGetCustomers();
   const { data: quotes } = useGetQuotes();
+  const { data: paymentMethods } = useGetPaymentMethods();
 
   const createQuote = useCreateQuote();
   const convertToSale = useConvertQuoteToSale();
@@ -169,6 +172,7 @@ export default function Quotes() {
       {
         data: {
           customerId: customerId === "none" ? null : parseInt(customerId),
+          paymentMethod: paymentMethod || "Efectivo",
           items: cart.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -185,6 +189,7 @@ export default function Quotes() {
           setCustomerId("none");
           setValidUntil("");
           setNotes("");
+          setPaymentMethod("Efectivo");
           queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
 
           // Auto-offer to print the saved quote
@@ -392,6 +397,33 @@ export default function Quotes() {
                       {c.name}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Payment Method */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Método de Pago
+              </label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger className="rounded-lg text-sm h-8">
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods && paymentMethods.length > 0
+                    ? paymentMethods.filter((m) => m.isActive).map((m) => (
+                        <SelectItem key={m.id} value={m.name}>
+                          {m.name}
+                        </SelectItem>
+                      ))
+                    : (
+                        <>
+                          <SelectItem value="Efectivo">Efectivo</SelectItem>
+                          <SelectItem value="Tarjeta">Tarjeta</SelectItem>
+                          <SelectItem value="Transferencia">Transferencia</SelectItem>
+                        </>
+                      )}
                 </SelectContent>
               </Select>
             </div>

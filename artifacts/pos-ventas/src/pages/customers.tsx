@@ -11,7 +11,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Toast, confirmDelete } from "@/lib/swal";
-import { Pencil, Trash2, Plus, Search } from "lucide-react";
+import { Pencil, Trash2, Plus, Search, FileBarChart2 } from "lucide-react";
+import { useLocation } from "wouter";
 
 const customerSchema = z.object({
   name: z.string().min(2, "Requerido"),
@@ -23,6 +24,7 @@ const customerSchema = z.object({
 
 export default function Customers() {
   const [search, setSearch] = useState("");
+  const [, navigate] = useLocation();
   const { data: customers, isLoading } = useGetCustomers({ search: search || undefined });
   
   const createMutation = useCreateCustomer();
@@ -171,7 +173,16 @@ export default function Customers() {
                     <div className="text-xs text-muted-foreground">{c.email}</div>
                   </TableCell>
                   <TableCell className="text-right font-medium">{c.totalPurchases}</TableCell>
-                  <TableCell className="text-right space-x-2">
+                  <TableCell className="text-right space-x-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 text-xs px-2"
+                      onClick={() => navigate(`/customers/${c.id}/statement`)}
+                    >
+                      <FileBarChart2 className="h-3.5 w-3.5" />
+                      Extracto
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(c)}>
                       <Pencil className="h-4 w-4" />
                     </Button>

@@ -24,6 +24,7 @@ import PaymentMethods from "@/pages/payment-methods";
 import Users from "@/pages/users";
 import Reports from "@/pages/reports";
 import CierreCaja from "@/pages/cierre-caja";
+import CustomerStatement from "@/pages/customer-statement";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ function AuthenticatedRoutes() {
         <Route path="/users" component={Users} />
         <Route path="/reports" component={Reports} />
         <Route path="/cierre-caja" component={CierreCaja} />
+        <Route path="/customers/:id/statement" component={CustomerStatement} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
