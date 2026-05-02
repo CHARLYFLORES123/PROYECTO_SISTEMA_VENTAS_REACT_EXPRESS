@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "PUpf9emgfmVETrsl2cwrX"
+uri = "file://arquitectura-perfisoft-ventas.md"
+type = "text"
+title = "Arquitectura — Sistema de Ventas Perfisoft"
