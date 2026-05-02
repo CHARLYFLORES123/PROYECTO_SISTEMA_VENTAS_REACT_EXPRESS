@@ -256,6 +256,7 @@ export default function POS() {
       const t = setTimeout(() => barcodeRef.current?.focus(), 120);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [cart.length]);
 
   // Escape key: clear search, pending qty and return focus to barcode scanner

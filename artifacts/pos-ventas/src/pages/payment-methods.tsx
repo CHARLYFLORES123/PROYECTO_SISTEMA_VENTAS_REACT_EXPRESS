@@ -81,7 +81,7 @@ export default function PaymentMethods() {
   };
 
   const toggleStatus = (id: number, currentStatus: boolean) => {
-    updateMutation.mutate({ id, data: { isActive: !currentStatus } }, {
+    updateMutation.mutate({ id, data: { isActive: !currentStatus } as any }, {
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] })
     });
   };

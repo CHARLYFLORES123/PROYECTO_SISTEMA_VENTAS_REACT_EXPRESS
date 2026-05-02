@@ -24,7 +24,7 @@ const currencies = [
 
 const schema = z.object({
   companyName: z.string().min(2, "Requerido"),
-  nit: z.string().optional().nullable(),
+  rucNit: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   email: z.string().email("Email inválido").optional().or(z.literal("")).nullable(),
   address: z.string().optional().nullable(),
@@ -41,14 +41,14 @@ export default function Settings() {
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: { companyName: "", nit: "", phone: "", email: "", address: "", logoUrl: "", currency: "BOB", currencySymbol: "Bs" },
+    defaultValues: { companyName: "", rucNit: "", phone: "", email: "", address: "", logoUrl: "", currency: "BOB", currencySymbol: "Bs" },
   });
 
   useEffect(() => {
     if (settings) {
       form.reset({
         companyName: settings.companyName,
-        nit: settings.nit || "",
+        rucNit: settings.rucNit || "",
         phone: settings.phone || "",
         email: settings.email || "",
         address: settings.address || "",
@@ -63,7 +63,7 @@ export default function Settings() {
     updateMutation.mutate({
       data: {
         ...values,
-        nit: values.nit || null,
+        rucNit: values.rucNit || null,
         phone: values.phone || null,
         email: values.email || null,
         address: values.address || null,
@@ -94,7 +94,7 @@ export default function Settings() {
                 <FormField control={form.control} name="companyName" render={({ field }) => (
                   <FormItem className="md:col-span-2"><FormLabel>Razón Social</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
-                <FormField control={form.control} name="nit" render={({ field }) => (
+                <FormField control={form.control} name="rucNit" render={({ field }) => (
                   <FormItem><FormLabel>RUC / NIT</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="phone" render={({ field }) => (
