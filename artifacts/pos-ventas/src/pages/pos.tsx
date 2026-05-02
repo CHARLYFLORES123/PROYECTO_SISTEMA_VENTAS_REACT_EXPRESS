@@ -46,6 +46,7 @@ export default function POS() {
   const [completedSale, setCompletedSale] = useState<CompletedSaleForModal | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currencySymbol } = useCurrency();
@@ -206,6 +207,7 @@ export default function POS() {
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              ref={searchRef}
               placeholder="Buscar producto por nombre o código..."
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -223,6 +225,11 @@ export default function POS() {
                 if (e.key === "Enter") {
                   handleBarcodeScan(barcodeInput);
                   setBarcodeInput("");
+                } else if (e.key.length === 1 && /[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]/u.test(e.key) && !barcodeInput) {
+                  // Letter key with empty scanner → redirect to search box
+                  e.preventDefault();
+                  setSearch(e.key);
+                  searchRef.current?.focus();
                 }
               }}
               placeholder="Escanear código..."
