@@ -133,6 +133,19 @@ export default function POS() {
     }
   }, [cart.length]);
 
+  // Escape key: clear search and return focus to barcode scanner
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSearch("");
+        setBarcodeInput("");
+        barcodeRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, []);
+
   const handleBarcodeScan = useCallback((code: string) => {
     const trimmed = code.trim();
     if (!trimmed || !products) return;
