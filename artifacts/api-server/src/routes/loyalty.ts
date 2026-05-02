@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { verifyToken, AuthRequest } from "../middlewares/auth";
+import { issueTierCoupon } from "./coupons";
 
 const router = Router();
 router.use(verifyToken);
@@ -87,6 +88,7 @@ export async function awardPointsForSale(
       notes: noteBase + noteMultiplier,
     });
 
+    let couponCode: string | null = null;
     if (tieredUp) {
       await tx.insert(pointsTransactionsTable).values({
         customerId,
@@ -94,9 +96,20 @@ export async function awardPointsForSale(
         type: "tier_up",
         notes: `¡Nivel alcanzado: ${TIER_CONFIG[newTier].label}! Multiplicador ×${TIER_CONFIG[newTier].multiplier}`,
       });
+      // Auto-issue a coupon for silver/gold upgrades
+      if (newTier === "silver" || newTier === "gold") {
+        const coupon = await issueTierCoupon(tx, customerId, newTier);
+        couponCode = coupon.code;
+        await tx.insert(pointsTransactionsTable).values({
+          customerId,
+          delta: 0,
+          type: "coupon",
+          notes: `¡Cupón generado: ${coupon.code} — ${TIER_CONFIG[newTier] ? "" : ""}${newTier === "gold" ? "10" : "5"}% de descuento!`,
+        });
+      }
     }
 
-    return { earned, tieredUp, newTier };
+    return { earned, tieredUp, newTier, couponCode };
   });
 }
 
@@ -280,9 +293,11 @@ router.post("/adjust", async (req: AuthRequest, res) => {
   try {
     const result = await db.transaction(async (tx) => {
       const bal = await getOrCreateBalance(tx, customerId);
+      const prevTier = bal.tier ?? "bronze";
       const newPoints = Math.max(0, bal.points + delta);
       const newLifetime = delta > 0 ? bal.lifetimeEarned + delta : bal.lifetimeEarned;
       const newTier = getTierForLifetime(newLifetime);
+      const tieredUp = newTier !== prevTier && delta > 0;
 
       await tx
         .update(customerPointsTable)
@@ -296,7 +311,25 @@ router.post("/adjust", async (req: AuthRequest, res) => {
         notes: notes ?? `Ajuste manual: ${delta > 0 ? "+" : ""}${delta} puntos`,
       });
 
-      return { customerId, points: newPoints, delta, tier: newTier };
+      let couponCode: string | null = null;
+      if (tieredUp && (newTier === "silver" || newTier === "gold")) {
+        await tx.insert(pointsTransactionsTable).values({
+          customerId,
+          delta: 0,
+          type: "tier_up",
+          notes: `¡Nivel alcanzado: ${TIER_CONFIG[newTier].label}! Multiplicador ×${TIER_CONFIG[newTier].multiplier}`,
+        });
+        const coupon = await issueTierCoupon(tx, customerId, newTier);
+        couponCode = coupon.code;
+        await tx.insert(pointsTransactionsTable).values({
+          customerId,
+          delta: 0,
+          type: "coupon",
+          notes: `¡Cupón generado: ${coupon.code} — ${newTier === "gold" ? "10" : "5"}% de descuento!`,
+        });
+      }
+
+      return { customerId, points: newPoints, delta, tier: newTier, tieredUp, couponCode };
     });
 
     res.json(result);

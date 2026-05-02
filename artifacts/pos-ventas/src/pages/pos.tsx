@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote, Star, Gift, Zap } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote, Star, Gift, Zap, Ticket, X } from "lucide-react";
 import { TierBadge } from "@/pages/loyalty";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
@@ -75,6 +75,12 @@ export default function POS() {
   const [showSuspended, setShowSuspended] = useState(false);
   const [pointsToRedeem, setPointsToRedeem] = useState(0);
   const [redeemingPoints, setRedeemingPoints] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [validatedCoupon, setValidatedCoupon] = useState<{
+    id: number; code: string; customerId: number; customerName: string;
+    discountPercent: number; tier: string; expiresAt: string;
+  } | null>(null);
+  const [couponValidating, setCouponValidating] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -103,8 +109,12 @@ export default function POS() {
     enabled: customerIdNum !== null && !!(settings as any)?.loyaltyEnabled,
   });
 
-  // Reset points when customer changes
-  useEffect(() => { setPointsToRedeem(0); }, [customerId]);
+  // Reset points and coupon when customer changes
+  useEffect(() => {
+    setPointsToRedeem(0);
+    setValidatedCoupon(null);
+    setCouponInput("");
+  }, [customerId]);
 
   const activePaymentMethods = useMemo(() => {
     if (!paymentMethods || paymentMethods.length === 0) return ["Efectivo", "Tarjeta", "Transferencia"];
@@ -132,8 +142,13 @@ export default function POS() {
     if (!pointsToRedeem || !loyaltyBalance) return 0;
     return +(pointsToRedeem * loyaltyBalance.redemptionRate).toFixed(2);
   }, [pointsToRedeem, loyaltyBalance]);
-  const iva = (subtotal - loyaltyDiscount) * 0.13;
-  const total = Math.max(0, subtotal - loyaltyDiscount + iva);
+  const couponDiscount = useMemo(() => {
+    if (!validatedCoupon) return 0;
+    const base = subtotal - loyaltyDiscount;
+    return +(base * validatedCoupon.discountPercent / 100).toFixed(2);
+  }, [validatedCoupon, subtotal, loyaltyDiscount]);
+  const iva = (subtotal - loyaltyDiscount - couponDiscount) * 0.13;
+  const total = Math.max(0, subtotal - loyaltyDiscount - couponDiscount + iva);
 
   const addToCart = (product: any, qty = 1) => {
     setCart(prev => {
@@ -350,9 +365,15 @@ export default function POS() {
       setRedeemingPoints(false);
     }
 
-    const notesWithPoints = loyaltyDiscountSnapshot > 0
-      ? [notes, `Descuento por puntos: ${formatCurrency(loyaltyDiscountSnapshot, currencySymbol)} (${pointsToRedeemSnapshot} pts)`].filter(Boolean).join(" | ")
-      : (notes || null);
+    const couponSnapshot = validatedCoupon;
+    const couponDiscountSnapshot = couponDiscount;
+
+    const notesParts = [
+      notes || null,
+      loyaltyDiscountSnapshot > 0 ? `Desc. puntos: ${formatCurrency(loyaltyDiscountSnapshot, currencySymbol)} (${pointsToRedeemSnapshot} pts)` : null,
+      couponSnapshot ? `Cupón ${couponSnapshot.code}: -${couponSnapshot.discountPercent}%` : null,
+    ].filter(Boolean);
+    const notesWithPoints = notesParts.length > 0 ? notesParts.join(" | ") : null;
 
     createSale.mutate({
       data: {
@@ -383,12 +404,21 @@ export default function POS() {
           })),
         };
         setCompletedSale(saleForModal);
+        // Redeem coupon if one was applied
+        if (couponSnapshot) {
+          apiFetch("/api/coupons/redeem", {
+            method: "POST",
+            body: JSON.stringify({ code: couponSnapshot.code, saleId: sale.id }),
+          }).catch(() => {});
+        }
         setCart([]);
         setCustomerId("none");
         setCustomerSearch("");
         setNotes("");
         setCashReceived("");
         setPointsToRedeem(0);
+        setValidatedCoupon(null);
+        setCouponInput("");
         if (paymentMethodSnapshot === "Efectivo" && cashReceivedSnapshot) {
           const change = parseFloat(cashReceivedSnapshot) - sale.total;
           if (change > 0) {
@@ -398,6 +428,9 @@ export default function POS() {
         // Show loyalty earned notification
         if ((sale as any).pointsEarned > 0) {
           Toast.fire({ icon: "success", title: `+${(sale as any).pointsEarned} puntos acumulados`, timer: 3000 });
+        }
+        if (couponSnapshot) {
+          Toast.fire({ icon: "success", title: `Cupón ${couponSnapshot.code} canjeado`, text: `-${couponSnapshot.discountPercent}%`, timer: 3000 });
         }
         queryClient.invalidateQueries({ queryKey: ["/api/products"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
@@ -760,6 +793,59 @@ export default function POS() {
                   </button>
                 </div>
 
+                {/* Coupon panel */}
+                {cart.length > 0 && (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-2.5 space-y-2">
+                    <p className="text-[11px] font-semibold text-violet-800 flex items-center gap-1">
+                      <Ticket className="w-3 h-3" /> Cupón de descuento
+                    </p>
+                    {validatedCoupon ? (
+                      <div className="rounded-lg border border-violet-300 bg-white px-2.5 py-2 flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-violet-800">{validatedCoupon.code}</p>
+                          <p className="text-[10px] text-violet-600">
+                            -{validatedCoupon.discountPercent}% · {validatedCoupon.customerName} · -{formatCurrency(couponDiscount, currencySymbol)}
+                          </p>
+                        </div>
+                        <button onClick={() => { setValidatedCoupon(null); setCouponInput(""); }}
+                          className="text-violet-400 hover:text-violet-700 shrink-0">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <Input
+                          value={couponInput}
+                          onChange={e => setCouponInput(e.target.value.toUpperCase())}
+                          onKeyDown={e => { if (e.key === "Enter") {
+                            e.preventDefault();
+                            setCouponValidating(true);
+                            apiFetch("/api/coupons/validate", { method: "POST", body: JSON.stringify({ code: couponInput }) })
+                              .then(d => setValidatedCoupon(d))
+                              .catch(err => Toast.fire({ icon: "error", title: err.message }))
+                              .finally(() => setCouponValidating(false));
+                          }}}
+                          placeholder="GOLD-XXXXXX"
+                          className="h-7 text-xs rounded-lg flex-1 font-mono tracking-widest"
+                        />
+                        <button
+                          disabled={!couponInput || couponValidating}
+                          onClick={() => {
+                            setCouponValidating(true);
+                            apiFetch("/api/coupons/validate", { method: "POST", body: JSON.stringify({ code: couponInput }) })
+                              .then(d => setValidatedCoupon(d))
+                              .catch(err => Toast.fire({ icon: "error", title: err.message }))
+                              .finally(() => setCouponValidating(false));
+                          }}
+                          className="h-7 px-3 text-[10px] font-semibold rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors shrink-0"
+                        >
+                          {couponValidating ? "..." : "Aplicar"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Loyalty redemption panel */}
                 {loyaltyBalance?.loyaltyEnabled && loyaltyBalance.points > 0 && cart.length > 0 && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 space-y-2">
@@ -926,9 +1012,15 @@ export default function POS() {
                 <span className="font-semibold">-{formatCurrency(loyaltyDiscount, currencySymbol)}</span>
               </div>
             )}
+            {couponDiscount > 0 && validatedCoupon && (
+              <div className="flex justify-between text-xs text-violet-700">
+                <span className="flex items-center gap-1"><Ticket className="w-3 h-3" /> Cupón {validatedCoupon.code} (-{validatedCoupon.discountPercent}%)</span>
+                <span className="font-semibold">-{formatCurrency(couponDiscount, currencySymbol)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Subtotal neto</span>
-              <span className="font-medium text-foreground">{formatCurrency(subtotal - loyaltyDiscount, currencySymbol)}</span>
+              <span className="font-medium text-foreground">{formatCurrency(subtotal - loyaltyDiscount - couponDiscount, currencySymbol)}</span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>IVA (13%)</span>

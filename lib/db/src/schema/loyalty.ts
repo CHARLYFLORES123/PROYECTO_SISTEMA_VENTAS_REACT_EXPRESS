@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, numeric, varchar, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, varchar, text, timestamp } from "drizzle-orm/pg-core";
 import { customersTable } from "./customers";
 import { salesTable } from "./sales";
 

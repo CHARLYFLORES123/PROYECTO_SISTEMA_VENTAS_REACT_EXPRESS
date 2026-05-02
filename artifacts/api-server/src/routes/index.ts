@@ -14,6 +14,7 @@ import paymentMethodsRouter from "./payment-methods";
 import usersManagementRouter from "./users-management";
 import reportsRouter from "./reports";
 import loyaltyRouter from "./loyalty";
+import couponsRouter from "./coupons";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use("/payment-methods", paymentMethodsRouter);
 router.use("/users", usersManagementRouter);
 router.use("/reports", reportsRouter);
 router.use("/loyalty", loyaltyRouter);
+router.use("/coupons", couponsRouter);
 
 export default router;

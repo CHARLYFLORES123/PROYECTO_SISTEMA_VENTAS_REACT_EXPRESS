@@ -50,7 +50,8 @@ lib/
 - `GET|POST /sales`, `GET /sales/:id`, `POST /sales/:id/cancel`
 - `GET|POST /quotes`, `GET /quotes/:id`, `POST /quotes/:id/convert`
 - `GET|PUT /business-settings` (auto-init default on first GET; includes loyaltyEnabled, pointsPerUnit, pointsRedemptionRate)
-- `GET /loyalty/leaderboard`, `GET /loyalty/balance/:id`, `GET /loyalty/history/:id`, `POST /loyalty/redeem`, `POST /loyalty/adjust`
+- `GET /loyalty/leaderboard`, `GET /loyalty/balance/:id`, `GET /loyalty/history/:id`, `GET /loyalty/tiers`, `POST /loyalty/redeem`, `POST /loyalty/adjust`
+- `GET /coupons`, `GET /coupons/customer/:id`, `POST /coupons/validate`, `POST /coupons/redeem`
 - `GET|POST|PUT|DELETE /payment-methods`
 - `GET|POST|PUT|DELETE /users` (user management)
 - `GET /dashboard/stats`, `/dashboard/sales-chart`, `/dashboard/top-products`, `/dashboard/recent-sales`

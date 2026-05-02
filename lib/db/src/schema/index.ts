@@ -9,3 +9,4 @@ export * from "./quotes";
 export * from "./business-settings";
 export * from "./payment-methods";
 export * from "./loyalty";
+export * from "./coupons";

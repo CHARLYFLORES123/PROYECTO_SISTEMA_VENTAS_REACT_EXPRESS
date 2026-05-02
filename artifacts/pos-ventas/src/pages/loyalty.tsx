@@ -1,10 +1,10 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, Trophy, Users, TrendingUp, Search, ChevronRight, Gift, Award, History, Zap } from "lucide-react";
+import { Star, Trophy, Users, TrendingUp, Search, ChevronRight, Gift, Award, History, Zap, Ticket, Clock, CheckCircle, XCircle } from "lucide-react";
 import { Toast, Swal } from "@/lib/swal";
 import { formatCurrency, useCurrency } from "@/contexts/currency-context";
 import { getToken } from "@/lib/auth";
@@ -74,12 +74,110 @@ interface PointsTransaction {
   createdAt: string;
 }
 
+interface CustomerCoupon {
+  id: number;
+  code: string;
+  tier: string;
+  discountPercent: number;
+  status: string;
+  expiresAt: string;
+  usedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   earned:   { label: "Ganados",   color: "text-green-700 bg-green-50 border-green-200" },
   redeemed: { label: "Canjeados", color: "text-orange-700 bg-orange-50 border-orange-200" },
   adjusted: { label: "Ajuste",    color: "text-blue-700 bg-blue-50 border-blue-200" },
   tier_up:  { label: "¡Nivel!",   color: "text-yellow-700 bg-yellow-50 border-yellow-300" },
+  coupon:   { label: "Cupón",     color: "text-violet-700 bg-violet-50 border-violet-200" },
 };
+
+// ── Coupons Modal ─────────────────────────────────────────────────────────────
+
+const STATUS_META: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
+  active:  { label: "Activo",   icon: <CheckCircle className="w-3 h-3" />,  cls: "text-green-700 bg-green-50 border-green-200" },
+  used:    { label: "Usado",    icon: <XCircle className="w-3 h-3" />,      cls: "text-slate-500 bg-slate-50 border-slate-200" },
+  expired: { label: "Vencido", icon: <Clock className="w-3 h-3" />,        cls: "text-red-600 bg-red-50 border-red-200" },
+};
+
+function CouponsModal({ customerId, customerName, onClose }: { customerId: number; customerName: string; onClose: () => void }) {
+  const { data: coupons, isLoading } = useQuery<CustomerCoupon[]>({
+    queryKey: ["/api/coupons/customer", customerId],
+    queryFn: () => apiFetch(`/api/coupons/customer/${customerId}`),
+  });
+
+  const active = coupons?.filter(c => c.status === "active") ?? [];
+  const used    = coupons?.filter(c => c.status !== "active") ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h3 className="font-bold text-base flex items-center gap-2">
+            <Ticket className="w-4 h-4 text-violet-600" /> Cupones — {customerName}
+          </h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm font-bold">✕</button>
+        </div>
+        <div className="overflow-y-auto p-4 space-y-3">
+          {isLoading && <p className="text-center text-sm text-muted-foreground py-8">Cargando...</p>}
+          {!isLoading && (!coupons || coupons.length === 0) && (
+            <div className="text-center py-10 space-y-2">
+              <Ticket className="w-10 h-10 mx-auto text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">Sin cupones generados aún</p>
+              <p className="text-xs text-muted-foreground/60">Se generan automáticamente al subir de nivel</p>
+            </div>
+          )}
+          {active.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Disponibles</p>
+              {active.map(c => {
+                const t = TIERS[c.tier as TierName] ?? TIERS.bronze;
+                return (
+                  <div key={c.id} className={`rounded-xl border-2 p-3.5 space-y-2 ${t.border} ${t.bg}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-mono font-bold text-base tracking-widest text-slate-800">{c.code}</p>
+                        <p className={`text-xs font-semibold mt-0.5 ${t.text}`}>{t.emoji} Nivel {t.label} · {c.discountPercent}% de descuento</p>
+                      </div>
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${STATUS_META.active.cls}`}>
+                        {STATUS_META.active.icon} Activo
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>Válido hasta: {new Date(c.expiresAt).toLocaleDateString("es")}</span>
+                      <span>Generado: {new Date(c.createdAt).toLocaleDateString("es")}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {used.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Historial</p>
+              {used.map(c => {
+                const meta = STATUS_META[c.status] ?? STATUS_META.expired;
+                return (
+                  <div key={c.id} className="rounded-xl border border-border/50 bg-muted/20 p-3 flex items-center gap-3 opacity-70">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono text-xs font-bold tracking-widest text-slate-600">{c.code}</p>
+                      <p className="text-[10px] text-muted-foreground">{c.discountPercent}% · {c.status === "used" && c.usedAt ? `Usado: ${new Date(c.usedAt).toLocaleDateString("es")}` : `Vencido: ${new Date(c.expiresAt).toLocaleDateString("es")}`}</p>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.cls}`}>
+                      {meta.icon} {meta.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── History Panel ──────────────────────────────────────────────────────────────
 
@@ -163,6 +261,7 @@ function TierProgressBar({ member }: { member: LoyaltyMember }) {
 export default function Loyalty() {
   const [search, setSearch] = useState("");
   const [historyFor, setHistoryFor] = useState<{ id: number; name: string } | null>(null);
+  const [couponsFor, setCouponsFor] = useState<{ id: number; name: string } | null>(null);
   const [tierFilter, setTierFilter] = useState<string>("all");
   const { currencySymbol } = useCurrency();
   const queryClient = useQueryClient();
@@ -432,6 +531,10 @@ export default function Loyalty() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 justify-end">
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-violet-600 hover:bg-violet-50"
+                              onClick={() => setCouponsFor({ id: m.customerId, name: m.customerName })}>
+                              <Ticket className="w-3.5 h-3.5 mr-1" /> Cupones
+                            </Button>
                             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-primary hover:bg-primary/10"
                               onClick={() => setHistoryFor({ id: m.customerId, name: m.customerName })}>
                               <History className="w-3.5 h-3.5 mr-1" /> Historial
@@ -451,6 +554,14 @@ export default function Loyalty() {
           )}
         </CardContent>
       </Card>
+
+      {couponsFor && (
+        <CouponsModal
+          customerId={couponsFor.id}
+          customerName={couponsFor.name}
+          onClose={() => setCouponsFor(null)}
+        />
+      )}
 
       {historyFor && (
         <HistoryPanel
