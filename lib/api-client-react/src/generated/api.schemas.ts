@@ -37,6 +37,21 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface CreateUserBody {
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+}
+
+export interface UpdateUserBody {
+  name: string;
+  email: string;
+  /** @nullable */
+  password?: string | null;
+  role: string;
+}
+
 export interface Category {
   id: number;
   name: string;
@@ -47,6 +62,21 @@ export interface Category {
 }
 
 export interface CreateCategoryBody {
+  name: string;
+  /** @nullable */
+  description?: string | null;
+}
+
+export interface Brand {
+  id: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  productCount: number;
+  createdAt: string;
+}
+
+export interface CreateBrandBody {
   name: string;
   /** @nullable */
   description?: string | null;
@@ -67,6 +97,12 @@ export interface Product {
   categoryId?: number | null;
   /** @nullable */
   categoryName?: string | null;
+  /** @nullable */
+  brandId?: number | null;
+  /** @nullable */
+  brandName?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
   createdAt: string;
 }
 
@@ -82,6 +118,17 @@ export interface CreateProductBody {
   minStock: number;
   /** @nullable */
   categoryId?: number | null;
+  /** @nullable */
+  brandId?: number | null;
+  /** @nullable */
+  imageUrl?: string | null;
+}
+
+export interface GetProductsQueryParams {
+  search?: string;
+  categoryId?: number;
+  brandId?: number;
+  lowStock?: boolean;
 }
 
 export interface Customer {
@@ -111,6 +158,36 @@ export interface CreateCustomerBody {
   address?: string | null;
 }
 
+export interface Supplier {
+  id: number;
+  name: string;
+  /** @nullable */
+  nitCi?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  address?: string | null;
+  createdAt: string;
+}
+
+export interface CreateSupplierBody {
+  name: string;
+  /** @nullable */
+  nitCi?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  address?: string | null;
+}
+
 export interface SaleItem {
   productId: number;
   quantity: number;
@@ -128,7 +205,8 @@ export interface CreateSaleBody {
 
 export interface SaleDetail {
   id: number;
-  productId: number;
+  /** @nullable */
+  productId?: number | null;
   productName: string;
   quantity: number;
   unitPrice: number;
@@ -141,6 +219,10 @@ export interface Sale {
   customerName?: string | null;
   /** @nullable */
   customerId?: number | null;
+  /** @nullable */
+  userName?: string | null;
+  /** @nullable */
+  userId?: number | null;
   subtotal: number;
   iva: number;
   total: number;
@@ -157,6 +239,10 @@ export interface SaleWithDetails {
   customerName?: string | null;
   /** @nullable */
   customerId?: number | null;
+  /** @nullable */
+  userName?: string | null;
+  /** @nullable */
+  userId?: number | null;
   subtotal: number;
   iva: number;
   total: number;
@@ -164,6 +250,69 @@ export interface SaleWithDetails {
   status: string;
   /** @nullable */
   notes?: string | null;
+  createdAt: string;
+  details: SaleDetail[];
+}
+
+export interface GetSalesQueryParams {
+  dateFrom?: string;
+  dateTo?: string;
+  customerId?: number;
+  userId?: number;
+}
+
+export interface CreateQuoteBody {
+  /** @nullable */
+  customerId?: number | null;
+  items: SaleItem[];
+  paymentMethod: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  validUntil?: string | null;
+}
+
+export interface Quote {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  userId?: number | null;
+  /** @nullable */
+  userName?: string | null;
+  subtotal: number;
+  iva: number;
+  total: number;
+  paymentMethod: string;
+  status: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  validUntil?: string | null;
+  createdAt: string;
+}
+
+export interface QuoteWithDetails {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  userId?: number | null;
+  /** @nullable */
+  userName?: string | null;
+  subtotal: number;
+  iva: number;
+  total: number;
+  paymentMethod: string;
+  status: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  validUntil?: string | null;
   createdAt: string;
   details: SaleDetail[];
 }
@@ -198,17 +347,99 @@ export interface InventoryReportItem {
   barcode?: string | null;
   /** @nullable */
   categoryName?: string | null;
+  /** @nullable */
+  brandName?: string | null;
   purchasePrice: number;
   salePrice: number;
   stock: number;
   minStock: number;
   stockValue: number;
   status: string;
+  /** @nullable */
+  imageUrl?: string | null;
+}
+
+export interface BusinessSettings {
+  id: number;
+  companyName: string;
+  /** @nullable */
+  rucNit?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  currency: string;
+  currencySymbol: string;
+  updatedAt: string;
+}
+
+export interface UpdateBusinessSettingsBody {
+  companyName: string;
+  /** @nullable */
+  rucNit?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  currency: string;
+  currencySymbol: string;
+}
+
+export interface PaymentMethod {
+  id: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CreatePaymentMethodBody {
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  isActive?: boolean;
+}
+
+export interface SalesByUserReport {
+  userId: number;
+  userName: string;
+  totalSales: number;
+  totalRevenue: number;
+}
+
+export interface CategoryReport {
+  /** @nullable */
+  categoryId?: number | null;
+  categoryName: string;
+  totalSold: number;
+  totalRevenue: number;
+}
+
+export interface StockAlertItem {
+  id: number;
+  name: string;
+  stock: number;
+  minStock: number;
+  /** @nullable */
+  categoryName?: string | null;
+  /** @nullable */
+  brandName?: string | null;
+  status: string;
 }
 
 export type GetProductsParams = {
   search?: string;
   categoryId?: number;
+  brandId?: number;
   lowStock?: boolean;
 };
 
@@ -216,8 +447,28 @@ export type GetCustomersParams = {
   search?: string;
 };
 
+export type GetSuppliersParams = {
+  search?: string;
+};
+
 export type GetSalesParams = {
   dateFrom?: string;
   dateTo?: string;
   customerId?: number;
+  userId?: number;
+};
+
+export type GetQuotesParams = {
+  customerId?: number;
+  status?: string;
+};
+
+export type GetReportSalesByUserParams = {
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export type GetReportByCategoryParams = {
+  dateFrom?: string;
+  dateTo?: string;
 };

@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, salesTable, saleDetailsTable, productsTable, customersTable } from "@workspace/db";
+import { db, salesTable, saleDetailsTable, productsTable, customersTable, usersTable } from "@workspace/db";
 import { eq, gte, lte, and, sql } from "drizzle-orm";
-import { CreateSaleBody, GetSalesQueryParams } from "@workspace/api-zod";
+import { CreateSaleBody } from "@workspace/api-zod";
 import { verifyToken, AuthRequest } from "../middlewares/auth";
 
 const router = Router();
@@ -9,11 +9,13 @@ router.use(verifyToken);
 
 const IVA_RATE = 0.13;
 
-function formatSale(s: any, customerName?: string | null) {
+function formatSale(s: any, customerName?: string | null, userName?: string | null) {
   return {
     id: s.id,
     customerId: s.customerId ?? null,
     customerName: customerName ?? null,
+    userId: s.userId ?? null,
+    userName: userName ?? null,
     subtotal: Number(s.subtotal),
     iva: Number(s.iva),
     total: Number(s.total),
@@ -26,34 +28,35 @@ function formatSale(s: any, customerName?: string | null) {
 
 // GET /api/sales
 router.get("/", async (req: AuthRequest, res) => {
-  const parsed = GetSalesQueryParams.safeParse(req.query);
-  const { dateFrom, dateTo, customerId } = parsed.success ? parsed.data : {} as any;
-
+  const { dateFrom, dateTo, customerId, userId } = req.query as any;
   try {
     const rows = await db
       .select({
         sale: salesTable,
         customerName: customersTable.name,
+        userName: usersTable.name,
       })
       .from(salesTable)
       .leftJoin(customersTable, eq(salesTable.customerId, customersTable.id))
+      .leftJoin(usersTable, eq(salesTable.userId, usersTable.id))
       .where(
         and(
           dateFrom ? gte(salesTable.createdAt, new Date(dateFrom)) : undefined,
-          dateTo ? lte(salesTable.createdAt, new Date(dateTo)) : undefined,
+          dateTo ? lte(salesTable.createdAt, new Date(new Date(dateTo).getTime() + 86399999)) : undefined,
           customerId ? eq(salesTable.customerId, Number(customerId)) : undefined,
+          userId ? eq(salesTable.userId, Number(userId)) : undefined,
         )
       )
       .orderBy(sql`${salesTable.createdAt} DESC`);
 
-    res.json(rows.map(r => formatSale(r.sale, r.customerName)));
+    res.json(rows.map(r => formatSale(r.sale, r.customerName, r.userName)));
   } catch (err) {
     req.log.error({ err }, "GetSales error");
     res.status(500).json({ message: "Error interno" });
   }
 });
 
-// POST /api/sales  — transactional: header + details + stock reduction
+// POST /api/sales — transactional
 router.post("/", async (req: AuthRequest, res) => {
   const parsed = CreateSaleBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
@@ -61,15 +64,12 @@ router.post("/", async (req: AuthRequest, res) => {
   const { customerId, items, paymentMethod, notes } = parsed.data;
 
   try {
-    // Fetch all products to validate stock and get names
     const productIds = items.map(i => i.productId);
     const products = await db.select().from(productsTable).where(
       sql`${productsTable.id} = ANY(${sql.raw(`ARRAY[${productIds.join(",")}]::int[]`)})`
     );
-
     const productMap = new Map(products.map(p => [p.id, p]));
 
-    // Validate stock
     for (const item of items) {
       const p = productMap.get(item.productId);
       if (!p) { res.status(400).json({ message: `Producto ${item.productId} no encontrado` }); return; }
@@ -79,14 +79,11 @@ router.post("/", async (req: AuthRequest, res) => {
       }
     }
 
-    // Calculate totals
     const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
     const iva = subtotal * IVA_RATE;
     const total = subtotal + iva;
 
-    // Transaction: insert sale + details + update stock
     const result = await db.transaction(async (tx) => {
-      // 1. Insert sale header
       const [sale] = await tx.insert(salesTable).values({
         customerId: customerId ?? null,
         userId: req.userId ?? null,
@@ -97,7 +94,6 @@ router.post("/", async (req: AuthRequest, res) => {
         notes: notes ?? null,
       }).returning();
 
-      // 2. Insert sale details
       for (const item of items) {
         const p = productMap.get(item.productId)!;
         await tx.insert(saleDetailsTable).values({
@@ -108,20 +104,17 @@ router.post("/", async (req: AuthRequest, res) => {
           unitPrice: String(item.unitPrice.toFixed(2)),
           subtotal: String((item.unitPrice * item.quantity).toFixed(2)),
         });
-
-        // 3. Reduce stock
         await tx.update(productsTable)
           .set({ stock: p.stock - item.quantity })
           .where(eq(productsTable.id, item.productId));
       }
-
       return sale;
     });
 
     let customerName: string | null = null;
     if (customerId) {
-      const [cust] = await db.select({ name: customersTable.name }).from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
-      customerName = cust?.name ?? null;
+      const [c] = await db.select({ name: customersTable.name }).from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      customerName = c?.name ?? null;
     }
 
     res.status(201).json(formatSale(result, customerName));
@@ -136,25 +129,21 @@ router.get("/:id", async (req, res) => {
   const id = Number(req.params.id);
   try {
     const [row] = await db
-      .select({ sale: salesTable, customerName: customersTable.name })
+      .select({ sale: salesTable, customerName: customersTable.name, userName: usersTable.name })
       .from(salesTable)
       .leftJoin(customersTable, eq(salesTable.customerId, customersTable.id))
+      .leftJoin(usersTable, eq(salesTable.userId, usersTable.id))
       .where(eq(salesTable.id, id))
       .limit(1);
 
     if (!row) { res.status(404).json({ message: "Venta no encontrada" }); return; }
 
     const details = await db.select().from(saleDetailsTable).where(eq(saleDetailsTable.saleId, id));
-
     res.json({
-      ...formatSale(row.sale, row.customerName),
+      ...formatSale(row.sale, row.customerName, row.userName),
       details: details.map(d => ({
-        id: d.id,
-        productId: d.productId ?? null,
-        productName: d.productName,
-        quantity: d.quantity,
-        unitPrice: Number(d.unitPrice),
-        subtotal: Number(d.subtotal),
+        id: d.id, productId: d.productId ?? null, productName: d.productName,
+        quantity: d.quantity, unitPrice: Number(d.unitPrice), subtotal: Number(d.subtotal),
       })),
     });
   } catch (err) {
@@ -175,8 +164,6 @@ router.post("/:id/cancel", async (req, res) => {
 
     await db.transaction(async (tx) => {
       await tx.update(salesTable).set({ status: "cancelada" }).where(eq(salesTable.id, id));
-
-      // Restore stock
       for (const d of details) {
         if (d.productId) {
           await tx.update(productsTable)

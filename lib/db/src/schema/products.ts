@@ -2,6 +2,7 @@ import { pgTable, serial, varchar, text, integer, numeric, timestamp } from "dri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { categoriesTable } from "./categories";
+import { brandsTable } from "./brands";
 
 export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
@@ -13,6 +14,8 @@ export const productsTable = pgTable("products", {
   stock: integer("stock").notNull().default(0),
   minStock: integer("min_stock").notNull().default(5),
   categoryId: integer("category_id").references(() => categoriesTable.id, { onDelete: "set null" }),
+  brandId: integer("brand_id").references(() => brandsTable.id, { onDelete: "set null" }),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

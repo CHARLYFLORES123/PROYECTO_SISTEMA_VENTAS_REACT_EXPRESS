@@ -120,11 +120,63 @@ export const DeleteCategoryResponse = zod.object({
 });
 
 /**
+ * @summary List all brands
+ */
+export const GetBrandsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  productCount: zod.number(),
+  createdAt: zod.string(),
+});
+export const GetBrandsResponse = zod.array(GetBrandsResponseItem);
+
+/**
+ * @summary Create brand
+ */
+export const CreateBrandBody = zod.object({
+  name: zod.string(),
+  description: zod.string().nullish(),
+});
+
+/**
+ * @summary Update brand
+ */
+export const UpdateBrandParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateBrandBody = zod.object({
+  name: zod.string(),
+  description: zod.string().nullish(),
+});
+
+export const UpdateBrandResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  productCount: zod.number(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete brand
+ */
+export const DeleteBrandParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteBrandResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
  * @summary List products with optional search
  */
 export const GetProductsQueryParams = zod.object({
   search: zod.coerce.string().optional(),
   categoryId: zod.coerce.number().optional(),
+  brandId: zod.coerce.number().optional(),
   lowStock: zod.coerce.boolean().optional(),
 });
 
@@ -139,6 +191,9 @@ export const GetProductsResponseItem = zod.object({
   minStock: zod.number(),
   categoryId: zod.number().nullish(),
   categoryName: zod.string().nullish(),
+  brandId: zod.number().nullish(),
+  brandName: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
   createdAt: zod.string(),
 });
 export const GetProductsResponse = zod.array(GetProductsResponseItem);
@@ -155,6 +210,8 @@ export const CreateProductBody = zod.object({
   stock: zod.number(),
   minStock: zod.number(),
   categoryId: zod.number().nullish(),
+  brandId: zod.number().nullish(),
+  imageUrl: zod.string().nullish(),
 });
 
 /**
@@ -175,6 +232,9 @@ export const GetProductByIdResponse = zod.object({
   minStock: zod.number(),
   categoryId: zod.number().nullish(),
   categoryName: zod.string().nullish(),
+  brandId: zod.number().nullish(),
+  brandName: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
   createdAt: zod.string(),
 });
 
@@ -194,6 +254,8 @@ export const UpdateProductBody = zod.object({
   stock: zod.number(),
   minStock: zod.number(),
   categoryId: zod.number().nullish(),
+  brandId: zod.number().nullish(),
+  imageUrl: zod.string().nullish(),
 });
 
 export const UpdateProductResponse = zod.object({
@@ -207,6 +269,9 @@ export const UpdateProductResponse = zod.object({
   minStock: zod.number(),
   categoryId: zod.number().nullish(),
   categoryName: zod.string().nullish(),
+  brandId: zod.number().nullish(),
+  brandName: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
   createdAt: zod.string(),
 });
 
@@ -220,6 +285,27 @@ export const DeleteProductParams = zod.object({
 export const DeleteProductResponse = zod.object({
   message: zod.string(),
 });
+
+/**
+ * @summary Get full inventory data for Excel export
+ */
+export const GetInventoryReportResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  barcode: zod.string().nullish(),
+  categoryName: zod.string().nullish(),
+  brandName: zod.string().nullish(),
+  purchasePrice: zod.number(),
+  salePrice: zod.number(),
+  stock: zod.number(),
+  minStock: zod.number(),
+  stockValue: zod.number(),
+  status: zod.string(),
+  imageUrl: zod.string().nullish(),
+});
+export const GetInventoryReportResponse = zod.array(
+  GetInventoryReportResponseItem,
+);
 
 /**
  * @summary List customers with optional search
@@ -307,18 +393,90 @@ export const DeleteCustomerResponse = zod.object({
 });
 
 /**
+ * @summary List suppliers
+ */
+export const GetSuppliersQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+});
+
+export const GetSuppliersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  nitCi: zod.string().nullish(),
+  contactName: zod.string().nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  address: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const GetSuppliersResponse = zod.array(GetSuppliersResponseItem);
+
+/**
+ * @summary Create supplier
+ */
+export const CreateSupplierBody = zod.object({
+  name: zod.string(),
+  nitCi: zod.string().nullish(),
+  contactName: zod.string().nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  address: zod.string().nullish(),
+});
+
+/**
+ * @summary Update supplier
+ */
+export const UpdateSupplierParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateSupplierBody = zod.object({
+  name: zod.string(),
+  nitCi: zod.string().nullish(),
+  contactName: zod.string().nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  address: zod.string().nullish(),
+});
+
+export const UpdateSupplierResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  nitCi: zod.string().nullish(),
+  contactName: zod.string().nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  address: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete supplier
+ */
+export const DeleteSupplierParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteSupplierResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
  * @summary List sales with optional date filters
  */
 export const GetSalesQueryParams = zod.object({
   dateFrom: zod.coerce.string().optional(),
   dateTo: zod.coerce.string().optional(),
   customerId: zod.coerce.number().optional(),
+  userId: zod.coerce.number().optional(),
 });
 
 export const GetSalesResponseItem = zod.object({
   id: zod.number(),
   customerName: zod.string().nullish(),
   customerId: zod.number().nullish(),
+  userName: zod.string().nullish(),
+  userId: zod.number().nullish(),
   subtotal: zod.number(),
   iva: zod.number(),
   total: zod.number(),
@@ -330,7 +488,7 @@ export const GetSalesResponseItem = zod.object({
 export const GetSalesResponse = zod.array(GetSalesResponseItem);
 
 /**
- * @summary Process a new sale (transactional — registers header, details, updates stock)
+ * @summary Process a new sale
  */
 export const CreateSaleBody = zod.object({
   customerId: zod.number().nullish(),
@@ -356,6 +514,8 @@ export const GetSaleByIdResponse = zod.object({
   id: zod.number(),
   customerName: zod.string().nullish(),
   customerId: zod.number().nullish(),
+  userName: zod.string().nullish(),
+  userId: zod.number().nullish(),
   subtotal: zod.number(),
   iva: zod.number(),
   total: zod.number(),
@@ -366,7 +526,7 @@ export const GetSaleByIdResponse = zod.object({
   details: zod.array(
     zod.object({
       id: zod.number(),
-      productId: zod.number(),
+      productId: zod.number().nullish(),
       productName: zod.string(),
       quantity: zod.number(),
       unitPrice: zod.number(),
@@ -384,6 +544,88 @@ export const CancelSaleParams = zod.object({
 
 export const CancelSaleResponse = zod.object({
   message: zod.string(),
+});
+
+/**
+ * @summary List all quotes/proformas
+ */
+export const GetQuotesQueryParams = zod.object({
+  customerId: zod.coerce.number().optional(),
+  status: zod.coerce.string().optional(),
+});
+
+export const GetQuotesResponseItem = zod.object({
+  id: zod.number(),
+  customerId: zod.number().nullish(),
+  customerName: zod.string().nullish(),
+  userId: zod.number().nullish(),
+  userName: zod.string().nullish(),
+  subtotal: zod.number(),
+  iva: zod.number(),
+  total: zod.number(),
+  paymentMethod: zod.string(),
+  status: zod.string(),
+  notes: zod.string().nullish(),
+  validUntil: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const GetQuotesResponse = zod.array(GetQuotesResponseItem);
+
+/**
+ * @summary Create a new quote/proforma (no stock reduction)
+ */
+export const CreateQuoteBody = zod.object({
+  customerId: zod.number().nullish(),
+  items: zod.array(
+    zod.object({
+      productId: zod.number(),
+      quantity: zod.number(),
+      unitPrice: zod.number(),
+    }),
+  ),
+  paymentMethod: zod.string(),
+  notes: zod.string().nullish(),
+  validUntil: zod.string().nullish(),
+});
+
+/**
+ * @summary Get quote with details
+ */
+export const GetQuoteByIdParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetQuoteByIdResponse = zod.object({
+  id: zod.number(),
+  customerId: zod.number().nullish(),
+  customerName: zod.string().nullish(),
+  userId: zod.number().nullish(),
+  userName: zod.string().nullish(),
+  subtotal: zod.number(),
+  iva: zod.number(),
+  total: zod.number(),
+  paymentMethod: zod.string(),
+  status: zod.string(),
+  notes: zod.string().nullish(),
+  validUntil: zod.string().nullish(),
+  createdAt: zod.string(),
+  details: zod.array(
+    zod.object({
+      id: zod.number(),
+      productId: zod.number().nullish(),
+      productName: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.number(),
+      subtotal: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Convert quote to sale (reduces stock)
+ */
+export const ConvertQuoteToSaleParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -427,6 +669,8 @@ export const GetRecentSalesResponseItem = zod.object({
   id: zod.number(),
   customerName: zod.string().nullish(),
   customerId: zod.number().nullish(),
+  userName: zod.string().nullish(),
+  userId: zod.number().nullish(),
   subtotal: zod.number(),
   iva: zod.number(),
   total: zod.number(),
@@ -438,20 +682,206 @@ export const GetRecentSalesResponseItem = zod.object({
 export const GetRecentSalesResponse = zod.array(GetRecentSalesResponseItem);
 
 /**
- * @summary Get full inventory data for Excel export
+ * @summary Get business configuration
  */
-export const GetInventoryReportResponseItem = zod.object({
+export const GetBusinessSettingsResponse = zod.object({
+  id: zod.number(),
+  companyName: zod.string(),
+  rucNit: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  address: zod.string().nullish(),
+  logoUrl: zod.string().nullish(),
+  currency: zod.string(),
+  currencySymbol: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update business configuration
+ */
+export const UpdateBusinessSettingsBody = zod.object({
+  companyName: zod.string(),
+  rucNit: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  address: zod.string().nullish(),
+  logoUrl: zod.string().nullish(),
+  currency: zod.string(),
+  currencySymbol: zod.string(),
+});
+
+export const UpdateBusinessSettingsResponse = zod.object({
+  id: zod.number(),
+  companyName: zod.string(),
+  rucNit: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  address: zod.string().nullish(),
+  logoUrl: zod.string().nullish(),
+  currency: zod.string(),
+  currencySymbol: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary List payment methods
+ */
+export const GetPaymentMethodsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
-  barcode: zod.string().nullish(),
-  categoryName: zod.string().nullish(),
-  purchasePrice: zod.number(),
-  salePrice: zod.number(),
+  description: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.string(),
+});
+export const GetPaymentMethodsResponse = zod.array(
+  GetPaymentMethodsResponseItem,
+);
+
+/**
+ * @summary Create payment method
+ */
+export const CreatePaymentMethodBody = zod.object({
+  name: zod.string(),
+  description: zod.string().nullish(),
+  isActive: zod.boolean().optional(),
+});
+
+/**
+ * @summary Update payment method
+ */
+export const UpdatePaymentMethodParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdatePaymentMethodBody = zod.object({
+  name: zod.string(),
+  description: zod.string().nullish(),
+  isActive: zod.boolean().optional(),
+});
+
+export const UpdatePaymentMethodResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete payment method
+ */
+export const DeletePaymentMethodParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeletePaymentMethodResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary List all system users
+ */
+export const GetUsersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.string(),
+  createdAt: zod.string(),
+});
+export const GetUsersResponse = zod.array(GetUsersResponseItem);
+
+/**
+ * @summary Create a new user
+ */
+export const CreateUserBody = zod.object({
+  name: zod.string(),
+  email: zod.string(),
+  password: zod.string(),
+  role: zod.string(),
+});
+
+/**
+ * @summary Update user
+ */
+export const UpdateUserParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateUserBody = zod.object({
+  name: zod.string(),
+  email: zod.string(),
+  password: zod.string().nullish(),
+  role: zod.string(),
+});
+
+export const UpdateUserResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.string(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete user
+ */
+export const DeleteUserParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteUserResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary Sales grouped by user/vendor
+ */
+export const GetReportSalesByUserQueryParams = zod.object({
+  dateFrom: zod.coerce.string().optional(),
+  dateTo: zod.coerce.string().optional(),
+});
+
+export const GetReportSalesByUserResponseItem = zod.object({
+  userId: zod.number(),
+  userName: zod.string(),
+  totalSales: zod.number(),
+  totalRevenue: zod.number(),
+});
+export const GetReportSalesByUserResponse = zod.array(
+  GetReportSalesByUserResponseItem,
+);
+
+/**
+ * @summary Sales/revenue grouped by category and brand
+ */
+export const GetReportByCategoryQueryParams = zod.object({
+  dateFrom: zod.coerce.string().optional(),
+  dateTo: zod.coerce.string().optional(),
+});
+
+export const GetReportByCategoryResponseItem = zod.object({
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string(),
+  totalSold: zod.number(),
+  totalRevenue: zod.number(),
+});
+export const GetReportByCategoryResponse = zod.array(
+  GetReportByCategoryResponseItem,
+);
+
+/**
+ * @summary Products with critical or zero stock
+ */
+export const GetReportStockAlertsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
   stock: zod.number(),
   minStock: zod.number(),
-  stockValue: zod.number(),
+  categoryName: zod.string().nullish(),
+  brandName: zod.string().nullish(),
   status: zod.string(),
 });
-export const GetInventoryReportResponse = zod.array(
-  GetInventoryReportResponseItem,
+export const GetReportStockAlertsResponse = zod.array(
+  GetReportStockAlertsResponseItem,
 );

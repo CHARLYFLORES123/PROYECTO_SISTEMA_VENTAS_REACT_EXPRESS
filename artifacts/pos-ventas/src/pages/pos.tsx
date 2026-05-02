@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useGetProducts, useGetCustomers, useCreateSale } from "@workspace/api-client-react";
+import { useGetProducts, useGetCustomers, useCreateSale, useGetBrands, useGetPaymentMethods } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Search, Plus, Minus, Trash2, ShoppingCart } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 
 interface CartItem {
   productId: number;
@@ -19,15 +20,27 @@ interface CartItem {
 
 export default function POS() {
   const [search, setSearch] = useState("");
+  const [brandId, setBrandId] = useState<string>("all");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerId, setCustomerId] = useState<string>("none");
   const [paymentMethod, setPaymentMethod] = useState<string>("Efectivo");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { currencySymbol } = useCurrency();
 
-  const { data: products } = useGetProducts({ search });
+  const { data: products } = useGetProducts({ 
+    search: search || undefined, 
+    brandId: brandId !== "all" ? parseInt(brandId) : undefined 
+  });
   const { data: customers } = useGetCustomers();
+  const { data: brands } = useGetBrands();
+  const { data: paymentMethods } = useGetPaymentMethods();
   const createSale = useCreateSale();
+
+  const activePaymentMethods = useMemo(() => {
+    if (!paymentMethods || paymentMethods.length === 0) return ["Efectivo", "Tarjeta", "Transferencia"];
+    return paymentMethods.filter(m => m.isActive).map(m => m.name);
+  }, [paymentMethods]);
 
   const subtotal = useMemo(() => cart.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0), [cart]);
   const iva = subtotal * 0.13;
@@ -104,14 +117,27 @@ export default function POS() {
     <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] gap-6">
       {/* Products Section */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="mb-4 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar por nombre o código de barras..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 py-6 text-lg"
-          />
+        <div className="mb-4 flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar por nombre o código de barras..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 py-6 text-lg"
+            />
+          </div>
+          <Select value={brandId} onValueChange={setBrandId}>
+            <SelectTrigger className="w-full sm:w-[200px] h-12">
+              <SelectValue placeholder="Todas las marcas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las marcas</SelectItem>
+              {brands?.map(b => (
+                <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         
         <ScrollArea className="flex-1">
@@ -119,16 +145,21 @@ export default function POS() {
             {products?.map((product) => (
               <Card 
                 key={product.id} 
-                className={`cursor-pointer transition-all hover:border-primary hover-elevate ${product.stock <= 0 ? 'opacity-50' : ''}`}
+                className={`cursor-pointer transition-all hover:border-primary hover-elevate overflow-hidden ${product.stock <= 0 ? 'opacity-50' : ''}`}
                 onClick={() => addToCart(product)}
               >
+                {product.imageUrl && (
+                  <div className="h-32 w-full bg-muted border-b flex items-center justify-center overflow-hidden">
+                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                  </div>
+                )}
                 <CardContent className="p-4 flex flex-col h-full justify-between gap-2">
                   <div>
                     <div className="font-bold leading-tight">{product.name}</div>
                     <div className="text-xs text-muted-foreground mt-1">{product.barcode || 'Sin código'}</div>
                   </div>
                   <div className="flex items-end justify-between mt-2">
-                    <div className="font-bold text-primary">${product.salePrice.toFixed(2)}</div>
+                    <div className="font-bold text-primary">{formatCurrency(product.salePrice, currencySymbol)}</div>
                     <div className={`text-xs font-medium ${product.stock <= product.minStock ? 'text-destructive' : 'text-muted-foreground'}`}>
                       Stock: {product.stock}
                     </div>
@@ -160,7 +191,7 @@ export default function POS() {
                 <div key={item.productId} className="flex gap-2 p-2 border rounded-md">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate text-sm">{item.productName}</div>
-                    <div className="text-xs text-muted-foreground">${item.unitPrice.toFixed(2)} c/u</div>
+                    <div className="text-xs text-muted-foreground">{formatCurrency(item.unitPrice, currencySymbol)} c/u</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(item.productId, -1)}>
@@ -203,9 +234,9 @@ export default function POS() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Efectivo">Efectivo</SelectItem>
-                  <SelectItem value="Tarjeta">Tarjeta</SelectItem>
-                  <SelectItem value="Transferencia">Transferencia</SelectItem>
+                  {activePaymentMethods.map(m => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -214,15 +245,15 @@ export default function POS() {
           <div className="pt-4 border-t space-y-1">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>{formatCurrency(subtotal, currencySymbol)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">IVA (13%)</span>
-              <span>${iva.toFixed(2)}</span>
+              <span>{formatCurrency(iva, currencySymbol)}</span>
             </div>
             <div className="flex justify-between font-bold text-xl pt-2">
               <span>TOTAL</span>
-              <span className="text-primary">${total.toFixed(2)}</span>
+              <span className="text-primary">{formatCurrency(total, currencySymbol)}</span>
             </div>
           </div>
 

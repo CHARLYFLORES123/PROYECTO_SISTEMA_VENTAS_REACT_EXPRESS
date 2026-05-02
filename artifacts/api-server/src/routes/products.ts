@@ -1,13 +1,13 @@
 import { Router } from "express";
-import { db, productsTable, categoriesTable } from "@workspace/db";
+import { db, productsTable, categoriesTable, brandsTable } from "@workspace/db";
 import { eq, ilike, and, lte, or, sql } from "drizzle-orm";
-import { CreateProductBody, GetProductsQueryParams } from "@workspace/api-zod";
+import { CreateProductBody } from "@workspace/api-zod";
 import { verifyToken } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
 
-function formatProduct(p: any, categoryName?: string | null) {
+function formatProduct(p: any, categoryName?: string | null, brandName?: string | null) {
   return {
     id: p.id,
     name: p.name,
@@ -19,15 +19,16 @@ function formatProduct(p: any, categoryName?: string | null) {
     minStock: p.minStock,
     categoryId: p.categoryId ?? null,
     categoryName: categoryName ?? null,
+    brandId: p.brandId ?? null,
+    brandName: brandName ?? null,
+    imageUrl: p.imageUrl ?? null,
     createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
   };
 }
 
 // GET /api/products
 router.get("/", async (req, res) => {
-  const parsed = GetProductsQueryParams.safeParse(req.query);
-  const { search, categoryId, lowStock } = parsed.success ? parsed.data : {} as any;
-
+  const { search, categoryId, brandId, lowStock } = req.query as any;
   try {
     const rows = await db
       .select({
@@ -41,27 +42,36 @@ router.get("/", async (req, res) => {
         minStock: productsTable.minStock,
         categoryId: productsTable.categoryId,
         categoryName: categoriesTable.name,
+        brandId: productsTable.brandId,
+        brandName: brandsTable.name,
+        imageUrl: productsTable.imageUrl,
         createdAt: productsTable.createdAt,
       })
       .from(productsTable)
       .leftJoin(categoriesTable, eq(productsTable.categoryId, categoriesTable.id))
+      .leftJoin(brandsTable, eq(productsTable.brandId, brandsTable.id))
       .where(
         and(
-          search ? or(ilike(productsTable.name, `%${search}%`), ilike(productsTable.barcode ?? sql`''`, `%${search}%`)) : undefined,
+          search ? or(
+            ilike(productsTable.name, `%${search}%`),
+            ilike(productsTable.barcode ?? sql`''`, `%${search}%`),
+            ilike(brandsTable.name ?? sql`''`, `%${search}%`),
+          ) : undefined,
           categoryId ? eq(productsTable.categoryId, Number(categoryId)) : undefined,
-          lowStock === true || lowStock === "true" ? lte(productsTable.stock, productsTable.minStock) : undefined,
+          brandId ? eq(productsTable.brandId, Number(brandId)) : undefined,
+          lowStock === "true" ? lte(productsTable.stock, productsTable.minStock) : undefined,
         )
       )
       .orderBy(productsTable.name);
 
-    res.json(rows.map(r => formatProduct(r, r.categoryName)));
+    res.json(rows.map(r => formatProduct(r, r.categoryName, r.brandName)));
   } catch (err) {
     req.log.error({ err }, "GetProducts error");
     res.status(500).json({ message: "Error interno" });
   }
 });
 
-// GET /api/products/inventory-report  — must be before /:id
+// GET /api/products/inventory-report — MUST be before /:id
 router.get("/inventory-report", async (req, res) => {
   try {
     const rows = await db
@@ -70,13 +80,16 @@ router.get("/inventory-report", async (req, res) => {
         name: productsTable.name,
         barcode: productsTable.barcode,
         categoryName: categoriesTable.name,
+        brandName: brandsTable.name,
         purchasePrice: productsTable.purchasePrice,
         salePrice: productsTable.salePrice,
         stock: productsTable.stock,
         minStock: productsTable.minStock,
+        imageUrl: productsTable.imageUrl,
       })
       .from(productsTable)
       .leftJoin(categoriesTable, eq(productsTable.categoryId, categoriesTable.id))
+      .leftJoin(brandsTable, eq(productsTable.brandId, brandsTable.id))
       .orderBy(productsTable.name);
 
     res.json(rows.map(r => ({
@@ -84,12 +97,14 @@ router.get("/inventory-report", async (req, res) => {
       name: r.name,
       barcode: r.barcode ?? null,
       categoryName: r.categoryName ?? null,
+      brandName: r.brandName ?? null,
       purchasePrice: Number(r.purchasePrice),
       salePrice: Number(r.salePrice),
       stock: r.stock,
       minStock: r.minStock,
       stockValue: Number(r.purchasePrice) * r.stock,
       status: r.stock === 0 ? "Sin stock" : r.stock <= r.minStock ? "Stock bajo" : "OK",
+      imageUrl: r.imageUrl ?? null,
     })));
   } catch (err) {
     req.log.error({ err }, "GetInventoryReport error");
@@ -101,7 +116,6 @@ router.get("/inventory-report", async (req, res) => {
 router.post("/", async (req, res) => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
-
   try {
     const [p] = await db.insert(productsTable).values({
       ...parsed.data,
@@ -120,13 +134,18 @@ router.get("/:id", async (req, res) => {
   const id = Number(req.params.id);
   try {
     const [row] = await db
-      .select({ p: productsTable, categoryName: categoriesTable.name })
+      .select({
+        p: productsTable,
+        categoryName: categoriesTable.name,
+        brandName: brandsTable.name,
+      })
       .from(productsTable)
       .leftJoin(categoriesTable, eq(productsTable.categoryId, categoriesTable.id))
+      .leftJoin(brandsTable, eq(productsTable.brandId, brandsTable.id))
       .where(eq(productsTable.id, id))
       .limit(1);
     if (!row) { res.status(404).json({ message: "Producto no encontrado" }); return; }
-    res.json(formatProduct(row.p, row.categoryName));
+    res.json(formatProduct(row.p, row.categoryName, row.brandName));
   } catch (err) {
     req.log.error({ err }, "GetProductById error");
     res.status(500).json({ message: "Error interno" });
@@ -138,7 +157,6 @@ router.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
-
   try {
     const [p] = await db.update(productsTable).set({
       ...parsed.data,

@@ -13,14 +13,28 @@ tags:
     description: Authentication
   - name: categories
     description: Product categories
+  - name: brands
+    description: Product brands
   - name: products
     description: Products and inventory
   - name: customers
     description: Customer management
+  - name: suppliers
+    description: Supplier management
   - name: sales
     description: Sales and transactions
+  - name: quotes
+    description: Quotes and proformas
   - name: dashboard
     description: Dashboard analytics
+  - name: business
+    description: Business settings
+  - name: payment-methods
+    description: Payment methods
+  - name: users
+    description: User management
+  - name: reports
+    description: Reports and analytics
 
 paths:
   /healthz:
@@ -194,6 +208,89 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
 
+  # BRANDS
+  /brands:
+    get:
+      operationId: getBrands
+      tags: [brands]
+      summary: List all brands
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of brands
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Brand"
+    post:
+      operationId: createBrand
+      tags: [brands]
+      summary: Create brand
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBrandBody"
+      responses:
+        "201":
+          description: Brand created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+
+  /brands/{id}:
+    put:
+      operationId: updateBrand
+      tags: [brands]
+      summary: Update brand
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBrandBody"
+      responses:
+        "200":
+          description: Brand updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+    delete:
+      operationId: deleteBrand
+      tags: [brands]
+      summary: Delete brand
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Brand deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
   # PRODUCTS
   /products:
     get:
@@ -209,6 +306,11 @@ paths:
           schema:
             type: string
         - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: brandId
           in: query
           required: false
           schema:
@@ -311,6 +413,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+
+  /products/inventory-report:
+    get:
+      operationId: getInventoryReport
+      tags: [products]
+      summary: Get full inventory data for Excel export
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inventory report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryReportItem"
 
   # CUSTOMERS
   /customers:
@@ -420,6 +539,95 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
 
+  # SUPPLIERS
+  /suppliers:
+    get:
+      operationId: getSuppliers
+      tags: [suppliers]
+      summary: List suppliers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supplier"
+    post:
+      operationId: createSupplier
+      tags: [suppliers]
+      summary: Create supplier
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplierBody"
+      responses:
+        "201":
+          description: Supplier created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  /suppliers/{id}:
+    put:
+      operationId: updateSupplier
+      tags: [suppliers]
+      summary: Update supplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplierBody"
+      responses:
+        "200":
+          description: Supplier updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+    delete:
+      operationId: deleteSupplier
+      tags: [suppliers]
+      summary: Delete supplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Supplier deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
   # SALES
   /sales:
     get:
@@ -444,6 +652,11 @@ paths:
           required: false
           schema:
             type: integer
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
           description: List of sales
@@ -456,7 +669,7 @@ paths:
     post:
       operationId: createSale
       tags: [sales]
-      summary: Process a new sale (transactional — registers header, details, updates stock)
+      summary: Process a new sale
       security:
         - bearerAuth: []
       requestBody:
@@ -514,6 +727,96 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+
+  # QUOTES
+  /quotes:
+    get:
+      operationId: getQuotes
+      tags: [quotes]
+      summary: List all quotes/proformas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of quotes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Quote"
+    post:
+      operationId: createQuote
+      tags: [quotes]
+      summary: Create a new quote/proforma (no stock reduction)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuoteBody"
+      responses:
+        "201":
+          description: Quote created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+
+  /quotes/{id}:
+    get:
+      operationId: getQuoteById
+      tags: [quotes]
+      summary: Get quote with details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quote with details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteWithDetails"
+
+  /quotes/{id}/convert:
+    post:
+      operationId: convertQuoteToSale
+      tags: [quotes]
+      summary: Convert quote to sale (reduces stock)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Sale created from quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
 
   # DASHBOARD
   /dashboard/stats:
@@ -582,22 +885,280 @@ paths:
                 items:
                   $ref: "#/components/schemas/Sale"
 
-  /products/inventory-report:
+  # BUSINESS SETTINGS
+  /business-settings:
     get:
-      operationId: getInventoryReport
-      tags: [products]
-      summary: Get full inventory data for Excel export
+      operationId: getBusinessSettings
+      tags: [business]
+      summary: Get business configuration
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Inventory report
+          description: Business settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessSettings"
+    put:
+      operationId: updateBusinessSettings
+      tags: [business]
+      summary: Update business configuration
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBusinessSettingsBody"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessSettings"
+
+  # PAYMENT METHODS
+  /payment-methods:
+    get:
+      operationId: getPaymentMethods
+      tags: [payment-methods]
+      summary: List payment methods
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of payment methods
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/InventoryReportItem"
+                  $ref: "#/components/schemas/PaymentMethod"
+    post:
+      operationId: createPaymentMethod
+      tags: [payment-methods]
+      summary: Create payment method
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentMethodBody"
+      responses:
+        "201":
+          description: Payment method created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethod"
+
+  /payment-methods/{id}:
+    put:
+      operationId: updatePaymentMethod
+      tags: [payment-methods]
+      summary: Update payment method
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentMethodBody"
+      responses:
+        "200":
+          description: Payment method updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethod"
+    delete:
+      operationId: deletePaymentMethod
+      tags: [payment-methods]
+      summary: Delete payment method
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # USERS MANAGEMENT
+  /users:
+    get:
+      operationId: getUsers
+      tags: [users]
+      summary: List all system users
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # REPORTS
+  /reports/sales-by-user:
+    get:
+      operationId: getReportSalesByUser
+      tags: [reports]
+      summary: Sales grouped by user/vendor
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dateFrom
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sales by user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesByUserReport"
+
+  /reports/by-category:
+    get:
+      operationId: getReportByCategory
+      tags: [reports]
+      summary: Sales/revenue grouped by category and brand
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dateFrom
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Report by category
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryReport"
+
+  /reports/stock-alerts:
+    get:
+      operationId: getReportStockAlerts
+      tags: [reports]
+      summary: Products with critical or zero stock
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Stock alert items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockAlertItem"
 
 components:
   securitySchemes:
@@ -666,6 +1227,32 @@ components:
           type: string
       required: [id, name, email, role, createdAt]
 
+    CreateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+      required: [name, email, password, role]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: ["string", "null"]
+        role:
+          type: string
+      required: [name, email, role]
+
     # CATEGORIES
     Category:
       type: object
@@ -683,6 +1270,31 @@ components:
       required: [id, name, productCount, createdAt]
 
     CreateCategoryBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+      required: [name]
+
+    # BRANDS
+    Brand:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        productCount:
+          type: integer
+        createdAt:
+          type: string
+      required: [id, name, productCount, createdAt]
+
+    CreateBrandBody:
       type: object
       properties:
         name:
@@ -715,6 +1327,12 @@ components:
           type: ["integer", "null"]
         categoryName:
           type: ["string", "null"]
+        brandId:
+          type: ["integer", "null"]
+        brandName:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
         createdAt:
           type: string
       required: [id, name, purchasePrice, salePrice, stock, minStock, createdAt]
@@ -738,7 +1356,23 @@ components:
           type: integer
         categoryId:
           type: ["integer", "null"]
+        brandId:
+          type: ["integer", "null"]
+        imageUrl:
+          type: ["string", "null"]
       required: [name, purchasePrice, salePrice, stock, minStock]
+
+    GetProductsQueryParams:
+      type: object
+      properties:
+        search:
+          type: string
+        categoryId:
+          type: integer
+        brandId:
+          type: integer
+        lowStock:
+          type: boolean
 
     # CUSTOMERS
     Customer:
@@ -768,6 +1402,45 @@ components:
         name:
           type: string
         nitCi:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+      required: [name]
+
+    # SUPPLIERS
+    Supplier:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        nitCi:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required: [id, name, createdAt]
+
+    CreateSupplierBody:
+      type: object
+      properties:
+        name:
+          type: string
+        nitCi:
+          type: ["string", "null"]
+        contactName:
           type: ["string", "null"]
         email:
           type: ["string", "null"]
@@ -810,7 +1483,7 @@ components:
         id:
           type: integer
         productId:
-          type: integer
+          type: ["integer", "null"]
         productName:
           type: string
         quantity:
@@ -819,7 +1492,7 @@ components:
           type: number
         subtotal:
           type: number
-      required: [id, productId, productName, quantity, unitPrice, subtotal]
+      required: [id, productName, quantity, unitPrice, subtotal]
 
     Sale:
       type: object
@@ -829,6 +1502,10 @@ components:
         customerName:
           type: ["string", "null"]
         customerId:
+          type: ["integer", "null"]
+        userName:
+          type: ["string", "null"]
+        userId:
           type: ["integer", "null"]
         subtotal:
           type: number
@@ -855,6 +1532,10 @@ components:
           type: ["string", "null"]
         customerId:
           type: ["integer", "null"]
+        userName:
+          type: ["string", "null"]
+        userId:
+          type: ["integer", "null"]
         subtotal:
           type: number
         iva:
@@ -866,6 +1547,102 @@ components:
         status:
           type: string
         notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleDetail"
+      required: [id, subtotal, iva, total, paymentMethod, status, createdAt, details]
+
+    GetSalesQueryParams:
+      type: object
+      properties:
+        dateFrom:
+          type: string
+        dateTo:
+          type: string
+        customerId:
+          type: integer
+        userId:
+          type: integer
+
+    # QUOTES
+    CreateQuoteBody:
+      type: object
+      properties:
+        customerId:
+          type: ["integer", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleItem"
+        paymentMethod:
+          type: string
+        notes:
+          type: ["string", "null"]
+        validUntil:
+          type: ["string", "null"]
+      required: [items, paymentMethod]
+
+    Quote:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: ["integer", "null"]
+        customerName:
+          type: ["string", "null"]
+        userId:
+          type: ["integer", "null"]
+        userName:
+          type: ["string", "null"]
+        subtotal:
+          type: number
+        iva:
+          type: number
+        total:
+          type: number
+        paymentMethod:
+          type: string
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        validUntil:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required: [id, subtotal, iva, total, paymentMethod, status, createdAt]
+
+    QuoteWithDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: ["integer", "null"]
+        customerName:
+          type: ["string", "null"]
+        userId:
+          type: ["integer", "null"]
+        userName:
+          type: ["string", "null"]
+        subtotal:
+          type: number
+        iva:
+          type: number
+        total:
+          type: number
+        paymentMethod:
+          type: string
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        validUntil:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -930,6 +1707,8 @@ components:
           type: ["string", "null"]
         categoryName:
           type: ["string", "null"]
+        brandName:
+          type: ["string", "null"]
         purchasePrice:
           type: number
         salePrice:
@@ -942,4 +1721,126 @@ components:
           type: number
         status:
           type: string
+        imageUrl:
+          type: ["string", "null"]
       required: [id, name, purchasePrice, salePrice, stock, minStock, stockValue, status]
+
+    # BUSINESS SETTINGS
+    BusinessSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyName:
+          type: string
+        rucNit:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        currency:
+          type: string
+        currencySymbol:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, companyName, currency, currencySymbol, updatedAt]
+
+    UpdateBusinessSettingsBody:
+      type: object
+      properties:
+        companyName:
+          type: string
+        rucNit:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        currency:
+          type: string
+        currencySymbol:
+          type: string
+      required: [companyName, currency, currencySymbol]
+
+    # PAYMENT METHODS
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+      required: [id, name, isActive, createdAt]
+
+    CreatePaymentMethodBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+      required: [name]
+
+    # REPORTS
+    SalesByUserReport:
+      type: object
+      properties:
+        userId:
+          type: integer
+        userName:
+          type: string
+        totalSales:
+          type: integer
+        totalRevenue:
+          type: number
+      required: [userId, userName, totalSales, totalRevenue]
+
+    CategoryReport:
+      type: object
+      properties:
+        categoryId:
+          type: ["integer", "null"]
+        categoryName:
+          type: string
+        totalSold:
+          type: integer
+        totalRevenue:
+          type: number
+      required: [categoryName, totalSold, totalRevenue]
+
+    StockAlertItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        stock:
+          type: integer
+        minStock:
+          type: integer
+        categoryName:
+          type: ["string", "null"]
+        brandName:
+          type: ["string", "null"]
+        status:
+          type: string
+      required: [id, name, stock, minStock, status]
