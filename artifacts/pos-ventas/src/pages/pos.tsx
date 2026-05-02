@@ -45,6 +45,7 @@ export default function POS() {
   const [notes, setNotes] = useState("");
   const [completedSale, setCompletedSale] = useState<CompletedSaleForModal | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [pendingQty, setPendingQty] = useState(1);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -82,24 +83,29 @@ export default function POS() {
   const iva = subtotal * 0.13;
   const total = subtotal + iva;
 
-  const addToCart = (product: any) => {
+  const addToCart = (product: any, qty = 1) => {
     setCart(prev => {
       const existing = prev.find(i => i.productId === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) {
+        const newQty = existing.quantity + qty;
+        if (newQty > product.stock) {
           toast({ title: "Stock insuficiente", description: `Solo quedan ${product.stock} unidades`, variant: "destructive" });
           return prev;
         }
-        return prev.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map(i => i.productId === product.id ? { ...i, quantity: newQty } : i);
       }
       if (product.stock <= 0) {
         toast({ title: "Sin stock disponible", variant: "destructive" });
         return prev;
       }
+      if (qty > product.stock) {
+        toast({ title: "Stock insuficiente", description: `Solo quedan ${product.stock} unidades`, variant: "destructive" });
+        return prev;
+      }
       return [...prev, {
         productId: product.id,
         productName: product.name,
-        quantity: 1,
+        quantity: qty,
         unitPrice: product.salePrice,
         stock: product.stock,
         imageUrl: product.imageUrl,
@@ -133,12 +139,13 @@ export default function POS() {
     }
   }, [cart.length]);
 
-  // Escape key: clear search and return focus to barcode scanner
+  // Escape key: clear search, pending qty and return focus to barcode scanner
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSearch("");
         setBarcodeInput("");
+        setPendingQty(1);
         barcodeRef.current?.focus();
       }
     };
@@ -156,9 +163,11 @@ export default function POS() {
       toast({ title: "Código no encontrado", description: `Barcode: ${trimmed}`, variant: "destructive" });
       return;
     }
-    addToCart(product);
-    toast({ title: `✓ ${product.name}`, description: "Añadido al carrito" });
-  }, [products]);
+    const qty = pendingQty;
+    setPendingQty(1);
+    addToCart(product, qty);
+    toast({ title: `✓ ${product.name}`, description: qty > 1 ? `${qty} unidades añadidas` : "Añadido al carrito" });
+  }, [products, pendingQty]);
 
   const processSale = () => {
     if (cart.length === 0) return;
@@ -228,12 +237,31 @@ export default function POS() {
             />
           </div>
           {/* Barcode scanner input */}
-          <div className="relative w-48 shrink-0">
-            <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/70 pointer-events-none" />
+          <div className="relative w-52 shrink-0">
+            <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/70 pointer-events-none z-10" />
+            {pendingQty > 1 && (
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-white text-xs font-bold px-1.5 py-0.5 rounded-md z-10 pointer-events-none">
+                ×{pendingQty}
+              </span>
+            )}
             <Input
               ref={barcodeRef}
               value={barcodeInput}
-              onChange={e => setBarcodeInput(e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                // Detect quantity shortcut: e.g. "3*" or "5×"
+                const match = val.match(/^(\d+)[*×]$/);
+                if (match) {
+                  const qty = Math.min(parseInt(match[1], 10), 999);
+                  if (qty >= 1) {
+                    setPendingQty(qty);
+                    setBarcodeInput("");
+                    toast({ title: `Cantidad: ×${qty}`, description: "Escanea el producto ahora" });
+                    return;
+                  }
+                }
+                setBarcodeInput(val);
+              }}
               onKeyDown={e => {
                 if (e.key === "Enter") {
                   handleBarcodeScan(barcodeInput);
@@ -245,8 +273,8 @@ export default function POS() {
                   searchRef.current?.focus();
                 }
               }}
-              placeholder="Escanear código..."
-              className="pl-9 h-11 bg-white border-primary/30 shadow-sm rounded-xl focus:border-primary text-sm"
+              placeholder={pendingQty > 1 ? `×${pendingQty} — Escanear...` : "Escanear código..."}
+              className={`pl-9 h-11 bg-white shadow-sm rounded-xl text-sm ${pendingQty > 1 ? "border-primary border-2 pr-10" : "border-primary/30 focus:border-primary"}`}
               autoComplete="off"
             />
           </div>
