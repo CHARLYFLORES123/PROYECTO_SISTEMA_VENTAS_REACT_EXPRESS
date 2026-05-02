@@ -1,22 +1,31 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useGetProducts, useGetCustomers, useCreateSale, useGetCategories, useGetPaymentMethods } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { BoletaModal } from "@/components/boleta-modal";
+import Swal from "sweetalert2";
+
+const Toast = Swal.mixin({
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timer: 2500,
+  timerProgressBar: true,
+  customClass: { popup: "!rounded-xl !text-sm !font-medium" },
+});
 
 interface CartItem {
   productId: number;
   productName: string;
   quantity: number;
   unitPrice: number;
+  discount: number;
   stock: number;
   imageUrl?: string | null;
 }
@@ -61,7 +70,6 @@ export default function POS() {
   const [showSuspended, setShowSuspended] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currencySymbol } = useCurrency();
 
@@ -92,7 +100,10 @@ export default function POS() {
     return customers?.find(c => c.id === parseInt(customerId));
   }, [customerId, customers]);
 
-  const subtotal = useMemo(() => cart.reduce((acc, i) => acc + i.quantity * i.unitPrice, 0), [cart]);
+  const subtotal = useMemo(() => cart.reduce((acc, i) =>
+    acc + i.quantity * i.unitPrice * (1 - i.discount / 100), 0), [cart]);
+  const totalDiscount = useMemo(() => cart.reduce((acc, i) =>
+    acc + i.quantity * i.unitPrice * (i.discount / 100), 0), [cart]);
   const iva = subtotal * 0.13;
   const total = subtotal + iva;
 
@@ -102,17 +113,17 @@ export default function POS() {
       if (existing) {
         const newQty = existing.quantity + qty;
         if (newQty > product.stock) {
-          toast({ title: "Stock insuficiente", description: `Solo quedan ${product.stock} unidades`, variant: "destructive" });
+          Toast.fire({ icon: "error", title: "Stock insuficiente", text: `Solo quedan ${product.stock} unidades` });
           return prev;
         }
         return prev.map(i => i.productId === product.id ? { ...i, quantity: newQty } : i);
       }
       if (product.stock <= 0) {
-        toast({ title: "Sin stock disponible", variant: "destructive" });
+        Toast.fire({ icon: "error", title: "Sin stock disponible" });
         return prev;
       }
       if (qty > product.stock) {
-        toast({ title: "Stock insuficiente", description: `Solo quedan ${product.stock} unidades`, variant: "destructive" });
+        Toast.fire({ icon: "error", title: "Stock insuficiente", text: `Solo quedan ${product.stock} unidades` });
         return prev;
       }
       return [...prev, {
@@ -120,6 +131,7 @@ export default function POS() {
         productName: product.name,
         quantity: qty,
         unitPrice: product.salePrice,
+        discount: 0,
         stock: product.stock,
         imageUrl: product.imageUrl,
       }];
@@ -131,7 +143,7 @@ export default function POS() {
       if (item.productId === productId) {
         const newQty = item.quantity + delta;
         if (newQty > item.stock) {
-          toast({ title: "Stock insuficiente", variant: "destructive" });
+          Toast.fire({ icon: "error", title: "Stock insuficiente" });
           return item;
         }
         return newQty > 0 ? { ...item, quantity: newQty } : item;
@@ -142,6 +154,57 @@ export default function POS() {
 
   const removeFromCart = (productId: number) => {
     setCart(prev => prev.filter(i => i.productId !== productId));
+  };
+
+  const applyDiscount = async (productId: number, productName: string, unitPrice: number) => {
+    const { isConfirmed, value } = await Swal.fire({
+      title: "Descuento rápido",
+      html: `
+        <p class="text-sm text-gray-500 mb-4">${productName}</p>
+        <div class="flex gap-2 mb-4" id="disc-type-btns">
+          <button type="button" id="btn-pct"
+            class="flex-1 py-2 text-sm font-semibold rounded-lg border-2 border-indigo-600 bg-indigo-600 text-white transition-all"
+            onclick="window._dtype='pct';
+              document.getElementById('btn-pct').className='flex-1 py-2 text-sm font-semibold rounded-lg border-2 border-indigo-600 bg-indigo-600 text-white transition-all';
+              document.getElementById('btn-fixed').className='flex-1 py-2 text-sm font-semibold rounded-lg border-2 border-gray-200 text-gray-500 transition-all';
+              document.getElementById('disc-label').textContent='Porcentaje (0–100)'">
+            % Porcentaje
+          </button>
+          <button type="button" id="btn-fixed"
+            class="flex-1 py-2 text-sm font-semibold rounded-lg border-2 border-gray-200 text-gray-500 transition-all"
+            onclick="window._dtype='fixed';
+              document.getElementById('btn-fixed').className='flex-1 py-2 text-sm font-semibold rounded-lg border-2 border-indigo-600 bg-indigo-600 text-white transition-all';
+              document.getElementById('btn-pct').className='flex-1 py-2 text-sm font-semibold rounded-lg border-2 border-gray-200 text-gray-500 transition-all';
+              document.getElementById('disc-label').textContent='Monto fijo (${currencySymbol})'">
+            $ Monto fijo
+          </button>
+        </div>
+        <label id="disc-label" class="block text-xs text-gray-400 mb-1 text-left">Porcentaje (0–100)</label>
+        <input id="disc-val" type="number" min="0" step="0.01"
+          class="swal2-input !mt-0"
+          placeholder="Ej: 10">
+      `,
+      confirmButtonText: "Aplicar",
+      confirmButtonColor: "#4F46E5",
+      cancelButtonText: "Cancelar",
+      showCancelButton: true,
+      focusConfirm: false,
+      didOpen: () => { (window as any)._dtype = "pct"; },
+      preConfirm: () => {
+        const val = parseFloat((document.getElementById("disc-val") as HTMLInputElement).value);
+        const dtype = (window as any)._dtype || "pct";
+        if (isNaN(val) || val < 0) { Swal.showValidationMessage("Ingresa un valor válido mayor a 0"); return false; }
+        if (dtype === "pct" && val > 100) { Swal.showValidationMessage("El porcentaje no puede superar 100%"); return false; }
+        if (dtype === "fixed" && val > unitPrice) { Swal.showValidationMessage(`El descuento no puede superar el precio (${formatCurrency(unitPrice, currencySymbol)})`); return false; }
+        return { dtype, val };
+      },
+    });
+    if (!isConfirmed || !value) return;
+    const discountPct = value.dtype === "pct" ? value.val : (value.val / unitPrice) * 100;
+    setCart(prev => prev.map(item =>
+      item.productId === productId ? { ...item, discount: Math.min(discountPct, 100) } : item
+    ));
+    Toast.fire({ icon: "success", title: `Descuento ${value.dtype === "pct" ? `${value.val}%` : formatCurrency(value.val, currencySymbol)} aplicado` });
   };
 
   const suspendSale = () => {
@@ -163,13 +226,12 @@ export default function POS() {
     setNotes("");
     setPendingQty(1);
     setBarcodeInput("");
-    toast({ title: "Venta suspendida", description: `${newSuspended.label} guardada. Puedes recuperarla cuando quieras.` });
+    Toast.fire({ icon: "info", title: "Venta suspendida", text: `${newSuspended.label} guardada` });
   };
 
   const recoverSale = (id: string) => {
     const suspended = suspendedSales.find(s => s.id === id);
     if (!suspended) return;
-    // If current cart has items, auto-suspend it first
     if (cart.length > 0) suspendSale();
     setCart(suspended.cart);
     setCustomerId(suspended.customerId);
@@ -178,12 +240,22 @@ export default function POS() {
     setNotes(suspended.notes);
     setSuspendedSales(prev => prev.filter(s => s.id !== id));
     setShowSuspended(false);
-    toast({ title: "Venta recuperada", description: suspended.label });
+    Toast.fire({ icon: "success", title: "Venta recuperada", text: suspended.label });
   };
 
-  const discardSuspended = (id: string) => {
+  const discardSuspended = async (id: string) => {
+    const result = await Swal.fire({
+      title: "¿Descartar esta venta?",
+      text: "Se eliminarán los productos del carrito en espera.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonText: "Cancelar",
+      confirmButtonText: "Sí, descartar",
+    });
+    if (!result.isConfirmed) return;
     setSuspendedSales(prev => prev.filter(s => s.id !== id));
-    toast({ title: "Venta descartada" });
+    Toast.fire({ icon: "info", title: "Venta descartada" });
   };
 
   // Kiosk mode: auto-focus barcode input when cart is empty
@@ -215,13 +287,13 @@ export default function POS() {
       p => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()
     );
     if (!product) {
-      toast({ title: "Código no encontrado", description: `Barcode: ${trimmed}`, variant: "destructive" });
+      Toast.fire({ icon: "error", title: "Código no encontrado", text: `Barcode: ${trimmed}` });
       return;
     }
     const qty = pendingQty;
     setPendingQty(1);
     addToCart(product, qty);
-    toast({ title: `✓ ${product.name}`, description: qty > 1 ? `${qty} unidades añadidas` : "Añadido al carrito" });
+    Toast.fire({ icon: "success", title: `✓ ${product.name}`, text: qty > 1 ? `${qty} unidades añadidas` : "Añadido al carrito" });
   }, [products, pendingQty]);
 
   const processSale = () => {
@@ -270,7 +342,7 @@ export default function POS() {
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       },
       onError: (err: any) => {
-        toast({ title: "Error al procesar venta", description: err.message, variant: "destructive" });
+        Swal.fire({ icon: "error", title: "Error al procesar venta", text: err.message, confirmButtonColor: "#4F46E5" });
       },
     });
   };
@@ -311,7 +383,7 @@ export default function POS() {
                   if (qty >= 1) {
                     setPendingQty(qty);
                     setBarcodeInput("");
-                    toast({ title: `Cantidad: ×${qty}`, description: "Escanea el producto ahora" });
+                    Toast.fire({ icon: "info", title: `Cantidad: ×${qty}`, text: "Escanea el producto ahora" });
                     return;
                   }
                 }
@@ -508,46 +580,80 @@ export default function POS() {
             </div>
           ) : (
             <div className="space-y-3">
-              {cart.map(item => (
-                <div key={item.productId} className="flex items-center gap-2 p-2.5 rounded-xl bg-muted/30 border border-border/50">
-                  {/* Thumbnail */}
-                  <div className="w-8 h-8 rounded-lg bg-muted overflow-hidden shrink-0">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package className="w-4 h-4 text-muted-foreground/40" />
+              {cart.map(item => {
+                const lineBase = item.quantity * item.unitPrice;
+                const lineFinal = lineBase * (1 - item.discount / 100);
+                return (
+                <div key={item.productId} className={`p-2.5 rounded-xl border transition-all ${item.discount > 0 ? "bg-green-50 border-green-200" : "bg-muted/30 border-border/50"}`}>
+                  <div className="flex items-center gap-2">
+                    {/* Thumbnail */}
+                    <div className="w-8 h-8 rounded-lg bg-muted overflow-hidden shrink-0">
+                      {item.imageUrl ? (
+                        <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package className="w-4 h-4 text-muted-foreground/40" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-semibold leading-tight line-clamp-1">{item.productName}</p>
+                        {item.discount > 0 && (
+                          <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-600 text-white">
+                            -{Math.round(item.discount)}%
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {item.discount > 0 ? (
+                          <>
+                            <span className="text-[10px] text-muted-foreground line-through">{formatCurrency(item.unitPrice, currencySymbol)}</span>
+                            <span className="text-[10px] font-semibold text-green-700">{formatCurrency(item.unitPrice * (1 - item.discount / 100), currencySymbol)} c/u</span>
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">{formatCurrency(item.unitPrice, currencySymbol)} c/u</span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Controls */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Discount button */}
+                      <button
+                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors border ${item.discount > 0 ? "bg-green-600 border-green-600 text-white" : "border-border hover:bg-green-50 hover:border-green-400 hover:text-green-700 text-muted-foreground"}`}
+                        onClick={() => applyDiscount(item.productId, item.productName, item.unitPrice)}
+                        title="Aplicar descuento"
+                      >
+                        <Tag className="w-3 h-3" />
+                      </button>
+                      <button
+                        className="w-6 h-6 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+                        onClick={() => updateQuantity(item.productId, -1)}
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="w-5 text-center text-xs font-bold">{item.quantity}</span>
+                      <button
+                        className="w-6 h-6 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+                        onClick={() => updateQuantity(item.productId, 1)}
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                      <button
+                        className="w-6 h-6 ml-0.5 rounded-full flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+                        onClick={() => removeFromCart(item.productId)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold leading-tight line-clamp-1">{item.productName}</p>
-                    <p className="text-[10px] text-muted-foreground">{formatCurrency(item.unitPrice, currencySymbol)} c/u</p>
-                  </div>
-                  {/* Qty controls */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      className="w-6 h-6 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
-                      onClick={() => updateQuantity(item.productId, -1)}
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="w-5 text-center text-xs font-bold">{item.quantity}</span>
-                    <button
-                      className="w-6 h-6 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
-                      onClick={() => updateQuantity(item.productId, 1)}
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                    <button
-                      className="w-6 h-6 ml-1 rounded-full flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
-                      onClick={() => removeFromCart(item.productId)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                  {/* Line total */}
+                  <div className="flex justify-end mt-1.5">
+                    <span className="text-[11px] font-bold text-foreground">{formatCurrency(lineFinal, currencySymbol)}</span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </ScrollArea>
@@ -622,7 +728,17 @@ export default function POS() {
           {/* Totals */}
           <div className="pt-2 border-t border-border/60 space-y-1.5">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Subtotal</span>
+              <span>Subtotal bruto</span>
+              <span className="font-medium text-foreground">{formatCurrency(subtotal + totalDiscount, currencySymbol)}</span>
+            </div>
+            {totalDiscount > 0 && (
+              <div className="flex justify-between text-xs text-green-700">
+                <span className="flex items-center gap-1"><Tag className="w-3 h-3" /> Descuentos</span>
+                <span className="font-semibold">-{formatCurrency(totalDiscount, currencySymbol)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Subtotal neto</span>
               <span className="font-medium text-foreground">{formatCurrency(subtotal, currencySymbol)}</span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
