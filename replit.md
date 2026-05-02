@@ -53,12 +53,23 @@ lib/
 - `GET /dashboard/stats`, `/dashboard/sales-chart`, `/dashboard/top-products`, `/dashboard/recent-sales`
 - `GET /reports/sales-by-user`, `/reports/by-category`, `/reports/stock-alerts`
 
+## Visual Design (Phase 3 — Perfisoft Clone)
+
+Implemented full Perfisoft visual redesign:
+- **Colors:** Primary `#4F46E5` (indigo), Background `#EEF0F5` (light blue-gray), White cards
+- **Sidebar:** White background, grouped nav sections, indigo active items with chevron
+- **Buttons:** Pill-shaped (`rounded-full`) for primary actions, matching Perfisoft exactly
+- **Login:** Floating labels, eye toggle, pill button, logo icon, demo credentials hint
+- **Dashboard:** 4 KPI cards, area chart (sales by date), top products bar, top sellers bar, recent sales table
+- **POS:** Category chip filters (pill-shaped), product grid with stock badges, cart panel with thumbnails
+- **Sales:** Formatted sale numbers (#000001), action menu (view/cancel), export to Excel, filter panel
+
 ## Frontend Pages (17 total)
 
 - `/` — Login (JWT stored in localStorage as "pos_token")
 - `/register` — Register
-- `/dashboard` — Stats cards + Recharts sales chart + top products + recent sales
-- `/pos` — Point of Sale (brand filter, dynamic payment methods, IVA 13%, customer selector)
+- `/dashboard` — 4 KPI cards + area chart + top products + top sellers + recent sales table
+- `/pos` — Point of Sale (category chips filter, product grid, cart panel, pill pay button)
 - `/products` — CRUD with category/brand filter, imageUrl, low stock badge
 - `/categories` — CRUD
 - `/customers` — CRUD with NIT/CI

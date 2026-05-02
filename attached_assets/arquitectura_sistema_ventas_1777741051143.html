@@ -1,0 +1,475 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.wrap { padding: 1rem 0; }
+.section-title { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+.badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; }
+.badge-blue { background: var(--color-background-info); color: var(--color-text-info); }
+.badge-green { background: var(--color-background-success); color: var(--color-text-success); }
+.badge-amber { background: var(--color-background-warning); color: var(--color-text-warning); }
+.badge-red { background: var(--color-background-danger); color: var(--color-text-danger); }
+.card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; }
+.card-sm { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 12px; }
+.module-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.module-btn { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 10px 8px; cursor: pointer; text-align: center; transition: border-color 0.15s, background 0.15s; }
+.module-btn:hover { border-color: var(--color-border-primary); }
+.module-btn.active { background: var(--color-background-primary); border: 1.5px solid var(--color-border-info); }
+.module-btn .icon { font-size: 18px; margin-bottom: 4px; }
+.module-btn .name { font-size: 12px; font-weight: 500; color: var(--color-text-primary); }
+.module-btn .route { font-size: 10px; color: var(--color-text-tertiary); margin-top: 2px; font-family: var(--font-mono); }
+.detail-panel { display: none; }
+.detail-panel.visible { display: block; }
+.feat-list { list-style: none; }
+.feat-list li { font-size: 13px; color: var(--color-text-secondary); padding: 4px 0; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: flex-start; gap: 8px; }
+.feat-list li:last-child { border-bottom: none; }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.dot-blue { background: #378ADD; }
+.dot-green { background: #639922; }
+.dot-amber { background: #BA7517; }
+.dot-purple { background: #534AB7; }
+.dot-teal { background: #0F6E56; }
+.dot-coral { background: #993C1D; }
+.stack-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stack-box { border-radius: var(--border-radius-md); padding: 12px; }
+.stack-fe { background: var(--color-background-info); border: 0.5px solid var(--color-border-info); }
+.stack-be { background: var(--color-background-success); border: 0.5px solid var(--color-border-success); }
+.stack-db { background: var(--color-background-warning); border: 0.5px solid var(--color-border-warning); }
+.stack-cloud { background: var(--color-background-danger); border: 0.5px solid var(--color-border-danger); }
+.stack-title { font-size: 12px; font-weight: 500; margin-bottom: 6px; }
+.stack-title.blue { color: var(--color-text-info); }
+.stack-title.green { color: var(--color-text-success); }
+.stack-title.amber { color: var(--color-text-warning); }
+.stack-title.red { color: var(--color-text-danger); }
+.stack-item { font-size: 11px; color: var(--color-text-secondary); padding: 2px 0; }
+.phase-list { display: flex; flex-direction: column; gap: 6px; }
+.phase { display: flex; align-items: flex-start; gap: 10px; }
+.phase-num { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; flex-shrink: 0; }
+.phase-body { flex: 1; }
+.phase-name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+.phase-items { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+.tab { font-size: 12px; padding: 4px 10px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); cursor: pointer; color: var(--color-text-secondary); background: transparent; transition: 0.15s; }
+.tab:hover { background: var(--color-background-secondary); }
+.tab.active { background: var(--color-background-info); color: var(--color-text-info); border-color: var(--color-border-info); font-weight: 500; }
+.db-table { background: var(--color-background-secondary); border-radius: var(--border-radius-md); overflow: hidden; margin-bottom: 8px; }
+.db-header { background: var(--color-background-primary); border-bottom: 0.5px solid var(--color-border-secondary); padding: 6px 10px; font-size: 12px; font-weight: 500; color: var(--color-text-primary); display: flex; align-items: center; gap: 6px; }
+.db-field { padding: 4px 10px; font-size: 11px; font-family: var(--font-mono); color: var(--color-text-secondary); border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; justify-content: space-between; }
+.db-field:last-child { border-bottom: none; }
+.db-type { color: var(--color-text-tertiary); }
+.db-pk { color: var(--color-text-warning); }
+.db-fk { color: var(--color-text-info); }
+.sep { height: 0.5px; background: var(--color-border-tertiary); margin: 14px 0; }
+</style>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('modulos')">Módulos</button>
+    <button class="tab" onclick="showTab('stack')">Stack Técnico</button>
+    <button class="tab" onclick="showTab('bd')">Base de Datos</button>
+    <button class="tab" onclick="showTab('fases')">Plan de Desarrollo</button>
+  </div>
+
+  <!-- MÓDULOS TAB -->
+  <div id="tab-modulos">
+    <div class="section-title">Selecciona un módulo para ver detalles</div>
+    <div class="module-grid" style="margin-bottom:12px;">
+      <div class="module-btn active" onclick="showModule('inicio')">
+        <div class="icon">📊</div>
+        <div class="name">Inicio</div>
+        <div class="route">/admin/inicio</div>
+      </div>
+      <div class="module-btn" onclick="showModule('ventas')">
+        <div class="icon">🛒</div>
+        <div class="name">Ventas</div>
+        <div class="route">/admin/ventas/*</div>
+      </div>
+      <div class="module-btn" onclick="showModule('inventario')">
+        <div class="icon">📦</div>
+        <div class="name">Inventario</div>
+        <div class="route">/admin/inventario/*</div>
+      </div>
+      <div class="module-btn" onclick="showModule('clientes')">
+        <div class="icon">👥</div>
+        <div class="name">Clientes</div>
+        <div class="route">/admin/clientes/*</div>
+      </div>
+      <div class="module-btn" onclick="showModule('usuarios')">
+        <div class="icon">🔑</div>
+        <div class="name">Usuarios</div>
+        <div class="route">/admin/usuarios/*</div>
+      </div>
+      <div class="module-btn" onclick="showModule('negocio')">
+        <div class="icon">🏢</div>
+        <div class="name">Negocio</div>
+        <div class="route">/admin/negocio</div>
+      </div>
+      <div class="module-btn" onclick="showModule('auth')">
+        <div class="icon">🔐</div>
+        <div class="name">Auth</div>
+        <div class="route">/sign-in</div>
+      </div>
+      <div class="module-btn" onclick="showModule('pwa')">
+        <div class="icon">📱</div>
+        <div class="name">PWA</div>
+        <div class="route">Offline</div>
+      </div>
+    </div>
+
+    <!-- Module details -->
+    <div id="m-inicio" class="card detail-panel visible">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">📊</span>
+        <span style="font-weight:500;font-size:15px;">Dashboard / Inicio</span>
+        <span class="badge badge-blue">Admin + todos</span>
+      </div>
+      <div class="section-title" style="margin-bottom:6px;">KPIs (4 tarjetas)</div>
+      <ul class="feat-list">
+        <li><span class="dot dot-blue"></span>Total Productos registrados</li>
+        <li><span class="dot dot-amber"></span>Total Clientes registrados</li>
+        <li><span class="dot dot-green"></span>Total Ventas realizadas (monto)</li>
+        <li><span class="dot dot-coral"></span>Total Ventas anuladas (monto)</li>
+      </ul>
+      <div class="sep"></div>
+      <div class="section-title" style="margin-bottom:6px;">Gráficas</div>
+      <ul class="feat-list">
+        <li><span class="dot dot-blue"></span>Línea — Ventas por fechas (con tooltip interactivo)</li>
+        <li><span class="dot dot-purple"></span>Barras horizontales — Top Productos más vendidos</li>
+        <li><span class="dot dot-teal"></span>Barras horizontales — Top Marcas más vendidas</li>
+      </ul>
+      <div class="sep"></div>
+      <div class="section-title" style="margin-bottom:6px;">Otras funciones</div>
+      <ul class="feat-list">
+        <li><span class="dot dot-green"></span>Filtro por rango de fechas (actualiza KPIs + gráficas)</li>
+        <li><span class="dot dot-amber"></span>Pestaña Colaboradores — grid de tarjetas del equipo</li>
+        <li><span class="dot dot-blue"></span>Multi-moneda dinámica (USD, EUR, GTQ, PEN...)</li>
+      </ul>
+    </div>
+
+    <div id="m-ventas" class="card detail-panel">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">🛒</span>
+        <span style="font-weight:500;font-size:15px;">Ventas</span>
+        <span class="badge badge-blue">5 sub-módulos</span>
+      </div>
+      <ul class="feat-list">
+        <li><span class="dot dot-blue"></span><b style="font-weight:500;">Nueva Venta:</b> Catálogo con filtros por categoría, buscador, carrito con cantidades, asociar cliente, nota adicional, checkbox enviar comprobante PDF por email, botón Pagar</li>
+        <li><span class="dot dot-green"></span><b style="font-weight:500;">Historial:</b> Tabla con número de venta (001-000265), cliente, vendedor, fecha, monto, estado COMPLETADO/ANULADO, acción anular</li>
+        <li><span class="dot dot-amber"></span><b style="font-weight:500;">Boleta PDF:</b> Generada automáticamente, subida a Cloudinary, enviada por email, con datos del negocio + cliente + productos</li>
+        <li><span class="dot dot-purple"></span><b style="font-weight:500;">Reporte por Productos:</b> Barras apiladas + donut + ranking, filtros por fecha y productos</li>
+        <li><span class="dot dot-teal"></span><b style="font-weight:500;">Reporte por Categorías:</b> Misma estructura agrupada por categoría</li>
+        <li><span class="dot dot-coral"></span><b style="font-weight:500;">Reporte por Marcas:</b> Misma estructura agrupada por marca</li>
+        <li><span class="dot dot-blue"></span>Exportar historial y reportes a Excel (.xlsx)</li>
+      </ul>
+    </div>
+
+    <div id="m-inventario" class="card detail-panel">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">📦</span>
+        <span style="font-weight:500;font-size:15px;">Inventario</span>
+        <span class="badge badge-green">3 sub-módulos</span>
+      </div>
+      <ul class="feat-list">
+        <li><span class="dot dot-blue"></span><b style="font-weight:500;">Productos:</b> Código auto, nombre, categoría, marca, precio compra/venta, stock (badge coloreado), imagen (upload), color, activo/inactivo — CRUD completo</li>
+        <li><span class="dot dot-green"></span><b style="font-weight:500;">Categorías:</b> Nombre, medida (Unidad/Kg/Litro...), descripción, color (color picker + HEX) — CRUD completo</li>
+        <li><span class="dot dot-amber"></span><b style="font-weight:500;">Marcas:</b> Nombre, descripción, color (color picker + HEX) — CRUD completo</li>
+        <li><span class="dot dot-purple"></span>Filtros avanzados en productos: por categorías múltiples, marcas múltiples, rango precios compra/venta, rango fechas</li>
+        <li><span class="dot dot-teal"></span>Exportar a Excel en todos los sub-módulos</li>
+        <li><span class="dot dot-coral"></span>Dot indicators de color en toda la app (categoría/marca)</li>
+      </ul>
+    </div>
+
+    <div id="m-clientes" class="card detail-panel">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">👥</span>
+        <span style="font-weight:500;font-size:15px;">Clientes</span>
+        <span class="badge badge-amber">CRUD completo</span>
+      </div>
+      <ul class="feat-list">
+        <li><span class="dot dot-blue"></span>Tabla: nombre, apellidos, email, número de documento, fecha registro, activo/inactivo</li>
+        <li><span class="dot dot-green"></span>Crear/editar cliente con campos: nombres, apellidos, correo, doc, celular, dirección</li>
+        <li><span class="dot dot-amber"></span>Toggle activo/inactivo en la lista</li>
+        <li><span class="dot dot-purple"></span>Buscar cliente desde Nueva Venta por Nro. Doc o Correo</li>
+        <li><span class="dot dot-teal"></span>Exportar lista a Excel</li>
+        <li><span class="dot dot-coral"></span>Paginación configurable (10 por página)</li>
+      </ul>
+    </div>
+
+    <div id="m-usuarios" class="card detail-panel">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">🔑</span>
+        <span style="font-weight:500;font-size:15px;">Usuarios y Roles</span>
+        <span class="badge badge-red">Solo Admin</span>
+      </div>
+      <div class="section-title" style="margin-bottom:6px;">4 Roles del Sistema</div>
+      <ul class="feat-list">
+        <li><span class="dot dot-coral"></span><b style="font-weight:500;">Administrador del sistema:</b> Acceso total a todos los módulos</li>
+        <li><span class="dot dot-blue"></span><b style="font-weight:500;">Gerente de Ventas:</b> Ventas, historial, reportes</li>
+        <li><span class="dot dot-green"></span><b style="font-weight:500;">Vendedor:</b> Solo Nueva Venta y clientes</li>
+        <li><span class="dot dot-amber"></span><b style="font-weight:500;">Encargado de Stock:</b> Inventario solamente</li>
+      </ul>
+      <div class="sep"></div>
+      <div class="section-title" style="margin-bottom:6px;">Crear Usuario — campos</div>
+      <ul class="feat-list">
+        <li><span class="dot dot-purple"></span>Tipo doc, Nro. doc, Rol, Género, Nombres, Apellidos, Celular, Dirección, Correo, Contraseña + Confirmar</li>
+      </ul>
+    </div>
+
+    <div id="m-negocio" class="card detail-panel">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">🏢</span>
+        <span style="font-weight:500;font-size:15px;">Negocio / Empresa</span>
+        <span class="badge badge-red">Solo Admin</span>
+      </div>
+      <ul class="feat-list">
+        <li><span class="dot dot-blue"></span>Logo empresa (upload imagen, recomendado 272×315px, máx 250KB)</li>
+        <li><span class="dot dot-green"></span>Razón Social, RUC/NIT (aparece en todas las boletas)</li>
+        <li><span class="dot dot-amber"></span>Teléfono, Email de notificaciones</li>
+        <li><span class="dot dot-purple"></span><b style="font-weight:500;">Moneda:</b> dropdown (USD, EUR, GTQ, PEN, etc.) — cambia símbolo en todo el sistema en tiempo real</li>
+        <li><span class="dot dot-teal"></span>Dirección de la empresa</li>
+        <li><span class="dot dot-coral"></span>Todos los datos se muestran en el PDF de boletas generadas</li>
+      </ul>
+    </div>
+
+    <div id="m-auth" class="card detail-panel">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">🔐</span>
+        <span style="font-weight:500;font-size:15px;">Autenticación JWT</span>
+        <span class="badge badge-blue">Público</span>
+      </div>
+      <ul class="feat-list">
+        <li><span class="dot dot-blue"></span>Login: email + contraseña, "Recuérdame", validaciones en tiempo real</li>
+        <li><span class="dot dot-green"></span>¿Olvidaste tu contraseña? — envío de enlace al email</li>
+        <li><span class="dot dot-amber"></span>Restablecer contraseña desde enlace</li>
+        <li><span class="dot dot-purple"></span>JWT Bearer Tokens con guards por rol en Angular</li>
+        <li><span class="dot dot-teal"></span>Persistencia de sesión con localStorage/cookies</li>
+      </ul>
+    </div>
+
+    <div id="m-pwa" class="card detail-panel">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:20px;">📱</span>
+        <span style="font-weight:500;font-size:15px;">PWA + Responsive</span>
+        <span class="badge badge-green">Multiplataforma</span>
+      </div>
+      <ul class="feat-list">
+        <li><span class="dot dot-blue"></span>Instalable como app de escritorio y móvil (prompt "Instalar la app")</li>
+        <li><span class="dot dot-green"></span>Diseño responsive: Mobile (iPhone 14 Pro Max), Tablet (iPad Pro), Desktop</li>
+        <li><span class="dot dot-amber"></span>Service Worker con @angular/pwa</li>
+        <li><span class="dot dot-purple"></span>Layout adaptativo — en mobile: 3 columnas de productos por fila</li>
+        <li><span class="dot dot-teal"></span>App name: "TuPlataformaVentas"</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- STACK TAB -->
+  <div id="tab-stack" style="display:none;">
+    <div class="section-title" style="margin-bottom:8px;">Arquitectura completa del sistema</div>
+    <div class="stack-row" style="margin-bottom:8px;">
+      <div class="stack-box stack-fe">
+        <div class="stack-title blue">Frontend — Angular 18</div>
+        <div class="stack-item">• Standalone Components</div>
+        <div class="stack-item">• Lazy loading por módulo</div>
+        <div class="stack-item">• RxJS + Services state</div>
+        <div class="stack-item">• Angular Material / custom</div>
+        <div class="stack-item">• Chart.js / NgRx Charts</div>
+        <div class="stack-item">• SheetJS (export Excel)</div>
+        <div class="stack-item">• @angular/pwa (PWA)</div>
+        <div class="stack-item">• Route Guards por rol</div>
+      </div>
+      <div class="stack-box stack-be">
+        <div class="stack-title green">Backend — .NET 9</div>
+        <div class="stack-item">• API REST con controllers</div>
+        <div class="stack-item">• Entity Framework Core</div>
+        <div class="stack-item">• JWT Bearer Auth</div>
+        <div class="stack-item">• Repository + Service pattern</div>
+        <div class="stack-item">• ClosedXML (export Excel)</div>
+        <div class="stack-item">• DinkToPDF / QuestPDF (PDF)</div>
+        <div class="stack-item">• SendGrid/SMTP (emails)</div>
+        <div class="stack-item">• CloudinaryDotNet</div>
+      </div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-box stack-db">
+        <div class="stack-title amber">Base de Datos</div>
+        <div class="stack-item">• SQL Server</div>
+        <div class="stack-item">• EF Core Migrations</div>
+        <div class="stack-item">• 8 tablas principales</div>
+        <div class="stack-item">• FK constraints</div>
+        <div class="stack-item">• Índices en búsquedas</div>
+      </div>
+      <div class="stack-box stack-cloud">
+        <div class="stack-title red">Servicios Cloud</div>
+        <div class="stack-item">• Cloudinary — imágenes</div>
+        <div class="stack-item">• Cloudinary — PDFs boletas</div>
+        <div class="stack-item">• Email service (SMTP)</div>
+        <div class="stack-item">• Hosting Smarter (deploy)</div>
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-title" style="margin-bottom:8px;">Estructura de Repositorio GitHub</div>
+    <div class="card-sm" style="font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);line-height:1.8;">
+      sistemadeventas/<br>
+      ├── 0-documentacion/ &nbsp;<span style="color:var(--color-text-tertiary)">// requerimientos, manual instalación</span><br>
+      ├── 1-scripts/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">// scripts SQL iniciales</span><br>
+      ├── 2-backend/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">// .NET 9 API</span><br>
+      ├── 3-frontend/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--color-text-tertiary)">// Angular 18</span><br>
+      └── README.md
+    </div>
+  </div>
+
+  <!-- BASE DE DATOS TAB -->
+  <div id="tab-bd" style="display:none;">
+    <div class="section-title" style="margin-bottom:8px;">8 tablas principales del sistema</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div>
+        <div class="db-table">
+          <div class="db-header"><span style="color:#378ADD;">⬡</span> Usuarios</div>
+          <div class="db-field"><span class="db-pk">Id</span><span class="db-type">GUID PK</span></div>
+          <div class="db-field"><span>Rol</span><span class="db-type">enum</span></div>
+          <div class="db-field"><span>Nombres / Apellidos</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Correo</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>PasswordHash</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Celular / Dirección</span><span class="db-type">string?</span></div>
+          <div class="db-field"><span>Activo</span><span class="db-type">bool</span></div>
+        </div>
+        <div class="db-table">
+          <div class="db-header"><span style="color:#639922;">⬡</span> Clientes</div>
+          <div class="db-field"><span class="db-pk">Id</span><span class="db-type">GUID PK</span></div>
+          <div class="db-field"><span>Nombres / Apellidos</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Correo</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>NumeroDocumento</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Celular / Direccion</span><span class="db-type">string?</span></div>
+          <div class="db-field"><span>Activo</span><span class="db-type">bool</span></div>
+        </div>
+        <div class="db-table">
+          <div class="db-header"><span style="color:#BA7517;">⬡</span> Marcas</div>
+          <div class="db-field"><span class="db-pk">Id</span><span class="db-type">GUID PK</span></div>
+          <div class="db-field"><span>Nombre</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Descripcion</span><span class="db-type">string?</span></div>
+          <div class="db-field"><span>Color</span><span class="db-type">string HEX</span></div>
+          <div class="db-field"><span>Activo</span><span class="db-type">bool</span></div>
+        </div>
+        <div class="db-table">
+          <div class="db-header"><span style="color:#534AB7;">⬡</span> Categorias</div>
+          <div class="db-field"><span class="db-pk">Id</span><span class="db-type">GUID PK</span></div>
+          <div class="db-field"><span>Nombre</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Medida</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Descripcion</span><span class="db-type">string?</span></div>
+          <div class="db-field"><span>Color</span><span class="db-type">string HEX</span></div>
+          <div class="db-field"><span>Activo</span><span class="db-type">bool</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="db-table">
+          <div class="db-header"><span style="color:#0F6E56;">⬡</span> Productos</div>
+          <div class="db-field"><span class="db-pk">Id</span><span class="db-type">GUID PK</span></div>
+          <div class="db-field"><span>Codigo</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Nombre</span><span class="db-type">string</span></div>
+          <div class="db-field"><span class="db-fk">CategoriaId</span><span class="db-type">FK</span></div>
+          <div class="db-field"><span class="db-fk">MarcaId</span><span class="db-type">FK</span></div>
+          <div class="db-field"><span>PrecioCompra / Venta</span><span class="db-type">decimal</span></div>
+          <div class="db-field"><span>Stock</span><span class="db-type">int</span></div>
+          <div class="db-field"><span>ImagenUrl / Color</span><span class="db-type">string?</span></div>
+        </div>
+        <div class="db-table">
+          <div class="db-header"><span style="color:#993C1D;">⬡</span> Ventas</div>
+          <div class="db-field"><span class="db-pk">Id</span><span class="db-type">GUID PK</span></div>
+          <div class="db-field"><span>NumeroVenta</span><span class="db-type">001-000265</span></div>
+          <div class="db-field"><span class="db-fk">ClienteId</span><span class="db-type">FK?</span></div>
+          <div class="db-field"><span class="db-fk">UsuarioId</span><span class="db-type">FK</span></div>
+          <div class="db-field"><span>FechaVenta</span><span class="db-type">datetime</span></div>
+          <div class="db-field"><span>TotalVenta</span><span class="db-type">decimal</span></div>
+          <div class="db-field"><span>Estado</span><span class="db-type">enum</span></div>
+          <div class="db-field"><span>BoletaUrl</span><span class="db-type">string?</span></div>
+        </div>
+        <div class="db-table">
+          <div class="db-header"><span style="color:#185FA5;">⬡</span> DetalleVentas</div>
+          <div class="db-field"><span class="db-pk">Id</span><span class="db-type">GUID PK</span></div>
+          <div class="db-field"><span class="db-fk">VentaId</span><span class="db-type">FK</span></div>
+          <div class="db-field"><span class="db-fk">ProductoId</span><span class="db-type">FK</span></div>
+          <div class="db-field"><span>Cantidad</span><span class="db-type">int</span></div>
+          <div class="db-field"><span>PrecioUnitario</span><span class="db-type">decimal</span></div>
+          <div class="db-field"><span>Total</span><span class="db-type">decimal</span></div>
+        </div>
+        <div class="db-table">
+          <div class="db-header"><span style="color:#3B6D11;">⬡</span> Negocio</div>
+          <div class="db-field"><span class="db-pk">Id</span><span class="db-type">GUID PK</span></div>
+          <div class="db-field"><span>RazonSocial / RUC</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Celular / Correo</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>Moneda</span><span class="db-type">string</span></div>
+          <div class="db-field"><span>LogoUrl / Direccion</span><span class="db-type">string?</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FASES TAB -->
+  <div id="tab-fases" style="display:none;">
+    <div class="section-title" style="margin-bottom:10px;">22 pasos en 5 fases</div>
+    <div class="phase-list">
+      <div class="phase">
+        <div class="phase-num" style="background:var(--color-background-info);color:var(--color-text-info);">1</div>
+        <div class="phase-body">
+          <div class="phase-name">Fase 1 — Base del Proyecto</div>
+          <div class="phase-items">Setup .NET 9 API · Entity Framework + SQL Server · Setup Angular 18 · Migraciones DB · JWT Authentication completo · Route Guards</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="phase-num" style="background:var(--color-background-success);color:var(--color-text-success);">2</div>
+        <div class="phase-body">
+          <div class="phase-name">Fase 2 — Módulos Core (CRUD)</div>
+          <div class="phase-items">CRUD Marcas con color picker · CRUD Categorías con medidas · CRUD Productos con upload imagen a Cloudinary · CRUD Clientes · CRUD Usuarios + roles</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="phase-num" style="background:var(--color-background-warning);color:var(--color-text-warning);">3</div>
+        <div class="phase-body">
+          <div class="phase-name">Fase 3 — Módulo Ventas (el más complejo)</div>
+          <div class="phase-items">Nueva Venta (catálogo + carrito + pago) · Generación PDF boleta · Numeración correlativa 001-XXXXXX · Envío email con SendGrid · Historial + filtros · Anulación de venta</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="phase-num" style="background:var(--color-background-danger);color:var(--color-text-danger);">4</div>
+        <div class="phase-body">
+          <div class="phase-name">Fase 4 — Dashboard y Reportes</div>
+          <div class="phase-items">Dashboard KPIs + gráfica línea · Top productos y marcas · Reporte por Productos (barras apiladas + donut + ranking) · Reporte por Categorías · Reporte por Marcas · Exportar todo a Excel</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="phase-num" style="background:var(--color-background-secondary);color:var(--color-text-secondary);border:0.5px solid var(--color-border-secondary);">5</div>
+        <div class="phase-body">
+          <div class="phase-name">Fase 5 — Configuración y PWA</div>
+          <div class="phase-items">Módulo Negocio (config empresa + moneda dinámica) · PWA manifest + service worker · Diseño responsive mobile/tablet · Guards de roles y permisos · Deploy</div>
+        </div>
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 0;" onclick="sendPrompt('Empecemos la Fase 1: setup del proyecto con .NET 9 API y Angular 18. Crea la estructura completa de carpetas, los proyectos base y las migraciones de Entity Framework con las 8 tablas del sistema.')">
+      <span style="font-size:13px;color:var(--color-text-info);font-weight:500;">Comenzar Fase 1 ahora</span>
+      <span style="font-size:12px;color:var(--color-text-info);">↗</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  ['modulos','stack','bd','fases'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===name ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab').forEach((el,i) => {
+    const names = ['modulos','stack','bd','fases'];
+    el.classList.toggle('active', names[i]===name);
+  });
+}
+function showModule(name) {
+  document.querySelectorAll('.module-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.detail-panel').forEach(p => { p.classList.remove('visible'); p.style.display='none'; });
+  event.currentTarget.classList.add('active');
+  const panel = document.getElementById('m-'+name);
+  if(panel) { panel.classList.add('visible'); panel.style.display='block'; }
+}
+// init
+document.querySelectorAll('.detail-panel').forEach(p => { p.style.display='none'; });
+document.getElementById('m-inicio').style.display='block';
+</script>
