@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useGetProducts, useGetCustomers, useCreateSale, useGetCategories, useGetPaymentMethods } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -123,6 +123,14 @@ export default function POS() {
   const removeFromCart = (productId: number) => {
     setCart(prev => prev.filter(i => i.productId !== productId));
   };
+
+  // Kiosk mode: auto-focus barcode input when cart is empty
+  useEffect(() => {
+    if (cart.length === 0) {
+      const t = setTimeout(() => barcodeRef.current?.focus(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [cart.length]);
 
   const handleBarcodeScan = useCallback((code: string) => {
     const trimmed = code.trim();
