@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useGetProducts, useGetCustomers, useCreateSale, useGetCategories, useGetPaymentMethods } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2 } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { BoletaModal } from "@/components/boleta-modal";
@@ -44,6 +44,8 @@ export default function POS() {
   const [paymentMethod, setPaymentMethod] = useState<string>("Efectivo");
   const [notes, setNotes] = useState("");
   const [completedSale, setCompletedSale] = useState<CompletedSaleForModal | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const barcodeRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currencySymbol } = useCurrency();
@@ -122,6 +124,20 @@ export default function POS() {
     setCart(prev => prev.filter(i => i.productId !== productId));
   };
 
+  const handleBarcodeScan = useCallback((code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed || !products) return;
+    const product = products.find(
+      p => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (!product) {
+      toast({ title: "Código no encontrado", description: `Barcode: ${trimmed}`, variant: "destructive" });
+      return;
+    }
+    addToCart(product);
+    toast({ title: `✓ ${product.name}`, description: "Añadido al carrito" });
+  }, [products]);
+
   const processSale = () => {
     if (cart.length === 0) return;
     // Snapshot cart for the modal (in case cart clears before modal opens)
@@ -178,14 +194,34 @@ export default function POS() {
       {/* ===== LEFT: Product Catalog ===== */}
       <div className="flex-1 flex flex-col min-w-0 gap-3">
         {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar producto por nombre o código..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 h-11 bg-white border-border shadow-sm rounded-xl"
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar producto por nombre o código..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-10 h-11 bg-white border-border shadow-sm rounded-xl"
+            />
+          </div>
+          {/* Barcode scanner input */}
+          <div className="relative w-48 shrink-0">
+            <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/70 pointer-events-none" />
+            <Input
+              ref={barcodeRef}
+              value={barcodeInput}
+              onChange={e => setBarcodeInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  handleBarcodeScan(barcodeInput);
+                  setBarcodeInput("");
+                }
+              }}
+              placeholder="Escanear código..."
+              className="pl-9 h-11 bg-white border-primary/30 shadow-sm rounded-xl focus:border-primary text-sm"
+              autoComplete="off"
+            />
+          </div>
         </div>
 
         {/* Category chips — Perfisoft style */}
