@@ -11,6 +11,7 @@ import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrency } from "@/contexts/currency-context";
 import { useQueryClient } from "@tanstack/react-query";
+import { ImageUpload } from "@/components/image-upload";
 
 const currencies = [
   { code: "BOB", symbol: "Bs" },
@@ -78,8 +79,6 @@ export default function Settings() {
     });
   };
 
-  const watchLogoUrl = form.watch("logoUrl");
-
   if (isLoading) return <div>Cargando...</div>;
 
   return (
@@ -126,18 +125,17 @@ export default function Settings() {
                 )} />
                 <FormField control={form.control} name="logoUrl" render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>URL del Logo</FormLabel>
-                    <div className="flex gap-4 items-start">
-                      <div className="flex-1">
-                        <FormControl><Input {...field} value={field.value || ""} placeholder="https://ejemplo.com/logo.png" /></FormControl>
-                        <FormMessage />
-                      </div>
-                      {watchLogoUrl && (
-                        <div className="w-16 h-16 border rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
-                          <img src={watchLogoUrl} alt="Logo preview" className="max-w-full max-h-full object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                        </div>
-                      )}
-                    </div>
+                    <FormLabel>Logo de la Empresa</FormLabel>
+                    <FormControl>
+                      <ImageUpload
+                        value={field.value}
+                        onChange={(val) => field.onChange(val ?? "")}
+                        maxWidthPx={400}
+                        maxHeightPx={400}
+                        label="Subir logo desde mis archivos"
+                      />
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )} />
               </div>

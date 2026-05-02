@@ -3,9 +3,10 @@ import { useGetSaleById, useGetBusinessSettings } from "@workspace/api-client-re
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, Printer, FileText } from "lucide-react";
+import { ArrowLeft, Download, Printer, FileText, Receipt } from "lucide-react";
 import { Link } from "wouter";
 import { downloadBoleta, printBoleta } from "@/lib/generate-boleta";
+import { downloadTicket, printTicket } from "@/lib/generate-ticket";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { useState } from "react";
 
@@ -17,20 +18,20 @@ export default function SaleDetail() {
   const { currencySymbol } = useCurrency();
   const [downloading, setDownloading] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [dlTicket, setDlTicket] = useState(false);
+  const [printingTicket, setPrintingTicket] = useState(false);
 
-  const handleDownload = () => {
+  const withLoading = (setter: (v: boolean) => void, fn: () => void) => {
     if (!sale || !settings) return;
-    setDownloading(true);
-    downloadBoleta(sale, settings);
-    setTimeout(() => setDownloading(false), 1200);
+    setter(true);
+    fn();
+    setTimeout(() => setter(false), 1200);
   };
 
-  const handlePrint = () => {
-    if (!sale || !settings) return;
-    setPrinting(true);
-    printBoleta(sale, settings);
-    setTimeout(() => setPrinting(false), 1200);
-  };
+  const handleDownload = () => withLoading(setDownloading, () => downloadBoleta(sale!, settings!));
+  const handlePrint = () => withLoading(setPrinting, () => printBoleta(sale!, settings!));
+  const handleDlTicket = () => withLoading(setDlTicket, () => downloadTicket(sale!, settings!));
+  const handlePrintTicket = () => withLoading(setPrintingTicket, () => printTicket(sale!, settings!));
 
   if (isLoading) {
     return (
@@ -81,7 +82,37 @@ export default function SaleDetail() {
           </span>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {/* Ticket térmico 80mm */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
+            onClick={handleDlTicket}
+            disabled={dlTicket || !settings}
+          >
+            {dlTicket ? (
+              <div className="w-3.5 h-3.5 border-2 border-amber-400/40 border-t-amber-600 rounded-full animate-spin" />
+            ) : (
+              <Receipt className="h-3.5 w-3.5" />
+            )}
+            Ticket 80mm
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
+            onClick={handlePrintTicket}
+            disabled={printingTicket || !settings}
+          >
+            {printingTicket ? (
+              <div className="w-3.5 h-3.5 border-2 border-amber-400/40 border-t-amber-600 rounded-full animate-spin" />
+            ) : (
+              <Printer className="h-3.5 w-3.5" />
+            )}
+            Imprimir Ticket
+          </Button>
+          {/* Boleta A4 */}
           <Button
             variant="outline"
             size="sm"
@@ -94,7 +125,7 @@ export default function SaleDetail() {
             ) : (
               <Printer className="h-3.5 w-3.5" />
             )}
-            Imprimir
+            Imprimir Boleta
           </Button>
           <Button
             size="sm"

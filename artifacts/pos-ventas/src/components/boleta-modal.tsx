@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Download, Printer, X, ShoppingCart } from "lucide-react";
+import { CheckCircle2, Download, Printer, X, ShoppingCart, Receipt } from "lucide-react";
 import { downloadBoleta, printBoleta } from "@/lib/generate-boleta";
+import { downloadTicket, printTicket } from "@/lib/generate-ticket";
 import { useGetBusinessSettings } from "@workspace/api-client-react";
 import { formatCurrency, useCurrency } from "@/contexts/currency-context";
 
@@ -33,30 +34,24 @@ interface BoletaModalProps {
   onClose: () => void;
 }
 
+function SpinIcon() {
+  return <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />;
+}
+
 export function BoletaModal({ sale, onClose }: BoletaModalProps) {
   const { data: settings } = useGetBusinessSettings();
   const { currencySymbol } = useCurrency();
   const [downloading, setDownloading] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [dlTicket, setDlTicket] = useState(false);
+  const [printTicketLoading, setPrintTicketLoading] = useState(false);
 
   if (!sale || !settings) return null;
 
-  const handleDownload = async () => {
-    setDownloading(true);
-    try {
-      downloadBoleta(sale, settings);
-    } finally {
-      setTimeout(() => setDownloading(false), 1000);
-    }
-  };
-
-  const handlePrint = async () => {
-    setPrinting(true);
-    try {
-      printBoleta(sale, settings);
-    } finally {
-      setTimeout(() => setPrinting(false), 1000);
-    }
+  const withLoading = (setter: (v: boolean) => void, fn: () => void) => {
+    setter(true);
+    fn();
+    setTimeout(() => setter(false), 1200);
   };
 
   return (
@@ -81,7 +76,6 @@ export function BoletaModal({ sale, onClose }: BoletaModalProps) {
 
         {/* Sale summary */}
         <div className="px-6 py-4 bg-white space-y-3">
-          {/* Details */}
           <div className="rounded-xl border border-border bg-muted/30 divide-y divide-border">
             <div className="flex justify-between items-center px-4 py-2.5 text-sm">
               <span className="text-muted-foreground">Cliente</span>
@@ -106,7 +100,7 @@ export function BoletaModal({ sale, onClose }: BoletaModalProps) {
           </div>
 
           {/* Products mini-list */}
-          <div className="space-y-1 max-h-28 overflow-y-auto">
+          <div className="space-y-1 max-h-24 overflow-y-auto">
             {sale.details.map((d) => (
               <div key={d.id} className="flex justify-between text-xs px-1">
                 <span className="text-muted-foreground truncate flex-1 mr-2">
@@ -119,35 +113,52 @@ export function BoletaModal({ sale, onClose }: BoletaModalProps) {
         </div>
 
         {/* Action buttons */}
-        <div className="px-6 pb-6 bg-white space-y-2.5">
-          <div className="flex gap-2.5">
+        <div className="px-6 pb-6 bg-white space-y-2">
+          {/* Row 1 — Boleta A4 */}
+          <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 rounded-full gap-2 h-10"
-              onClick={handleDownload}
+              className="flex-1 rounded-full gap-1.5 h-9 text-sm"
+              onClick={() => withLoading(setDownloading, () => downloadBoleta(sale, settings))}
               disabled={downloading}
             >
-              {downloading ? (
-                <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              Descargar PDF
+              {downloading ? <SpinIcon /> : <Download className="w-3.5 h-3.5" />}
+              Boleta PDF
             </Button>
             <Button
               variant="outline"
-              className="flex-1 rounded-full gap-2 h-10"
-              onClick={handlePrint}
+              className="flex-1 rounded-full gap-1.5 h-9 text-sm"
+              onClick={() => withLoading(setPrinting, () => printBoleta(sale, settings))}
               disabled={printing}
             >
-              {printing ? (
-                <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-              ) : (
-                <Printer className="w-4 h-4" />
-              )}
+              {printing ? <SpinIcon /> : <Printer className="w-3.5 h-3.5" />}
               Imprimir
             </Button>
           </div>
+
+          {/* Row 2 — Ticket térmico */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-full gap-1.5 h-9 text-sm border-amber-200 text-amber-700 hover:bg-amber-50"
+              onClick={() => withLoading(setDlTicket, () => downloadTicket(sale, settings))}
+              disabled={dlTicket}
+            >
+              {dlTicket ? <SpinIcon /> : <Receipt className="w-3.5 h-3.5" />}
+              Ticket 80mm
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1 rounded-full gap-1.5 h-9 text-sm border-amber-200 text-amber-700 hover:bg-amber-50"
+              onClick={() => withLoading(setPrintTicketLoading, () => printTicket(sale, settings))}
+              disabled={printTicketLoading}
+            >
+              {printTicketLoading ? <SpinIcon /> : <Printer className="w-3.5 h-3.5" />}
+              Imprimir Ticket
+            </Button>
+          </div>
+
+          {/* Row 3 — Nueva venta */}
           <Button
             className="w-full rounded-full h-11 gap-2 font-semibold"
             onClick={onClose}

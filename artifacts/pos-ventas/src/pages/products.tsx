@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus, Search, AlertTriangle, Image as ImageIcon } from "lucide-react";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
+import { ImageUpload } from "@/components/image-upload";
 
 const productSchema = z.object({
   name: z.string().min(2, "Requerido"),
@@ -123,8 +124,6 @@ export default function Products() {
     }
   };
 
-  const watchImageUrl = form.watch("imageUrl");
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -226,18 +225,17 @@ export default function Products() {
                     )} />
                     <FormField control={form.control} name="imageUrl" render={({ field }) => (
                       <FormItem className="md:col-span-2">
-                        <FormLabel>URL de Imagen</FormLabel>
-                        <div className="flex gap-4 items-start">
-                          <div className="flex-1">
-                            <FormControl><Input {...field} value={field.value || ""} placeholder="https://ejemplo.com/imagen.jpg" /></FormControl>
-                            <FormMessage />
-                          </div>
-                          {watchImageUrl && (
-                            <div className="w-16 h-16 border rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
-                              <img src={watchImageUrl} alt="Preview" className="max-w-full max-h-full object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                            </div>
-                          )}
-                        </div>
+                        <FormLabel>Imagen del Producto</FormLabel>
+                        <FormControl>
+                          <ImageUpload
+                            value={field.value}
+                            onChange={(val) => field.onChange(val ?? "")}
+                            maxWidthPx={500}
+                            maxHeightPx={500}
+                            label="Subir imagen desde mis archivos"
+                          />
+                        </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )} />
                     <div className="md:col-span-2 flex justify-end gap-2 mt-4">
