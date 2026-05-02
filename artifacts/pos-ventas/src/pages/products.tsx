@@ -13,7 +13,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useToast } from "@/hooks/use-toast";
+import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus, Search, AlertTriangle, Image as ImageIcon } from "lucide-react";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { ImageUpload } from "@/components/image-upload";
@@ -49,7 +49,6 @@ export default function Products() {
   const updateMutation = useUpdateProduct();
   const deleteMutation = useDeleteProduct();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -97,7 +96,7 @@ export default function Products() {
     if (editingId) {
       updateMutation.mutate({ id: editingId, data }, {
         onSuccess: () => {
-          toast({ title: "Producto actualizado" });
+          Toast.fire({ icon: "success", title: "Producto actualizado" });
           queryClient.invalidateQueries({ queryKey: ["/api/products"] });
           setIsOpen(false);
         }
@@ -105,7 +104,7 @@ export default function Products() {
     } else {
       createMutation.mutate({ data }, {
         onSuccess: () => {
-          toast({ title: "Producto creado" });
+          Toast.fire({ icon: "success", title: "Producto creado" });
           queryClient.invalidateQueries({ queryKey: ["/api/products"] });
           setIsOpen(false);
         }
@@ -113,15 +112,15 @@ export default function Products() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("¿Estás seguro de eliminar este producto?")) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: "Producto eliminado" });
-          queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-        }
-      });
-    }
+  const handleDelete = async (id: number) => {
+    const result = await confirmDelete("este producto");
+    if (!result.isConfirmed) return;
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => {
+        Toast.fire({ icon: "success", title: "Producto eliminado" });
+        queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      }
+    });
   };
 
   return (

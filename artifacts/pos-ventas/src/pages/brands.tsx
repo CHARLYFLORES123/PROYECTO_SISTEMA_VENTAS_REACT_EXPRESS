@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useToast } from "@/hooks/use-toast";
+import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
 
 const brandSchema = z.object({
@@ -26,7 +26,6 @@ export default function Brands() {
   const updateMutation = useUpdateBrand();
   const deleteMutation = useDeleteBrand();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -53,7 +52,7 @@ export default function Brands() {
     if (editingId) {
       updateMutation.mutate({ id: editingId, data }, {
         onSuccess: () => {
-          toast({ title: "Marca actualizada" });
+          Toast.fire({ icon: "success", title: "Marca actualizada" });
           queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
           setIsOpen(false);
         }
@@ -61,7 +60,7 @@ export default function Brands() {
     } else {
       createMutation.mutate({ data }, {
         onSuccess: () => {
-          toast({ title: "Marca creada" });
+          Toast.fire({ icon: "success", title: "Marca creada" });
           queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
           setIsOpen(false);
         }
@@ -69,15 +68,15 @@ export default function Brands() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("¿Estás seguro de eliminar esta marca?")) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: "Marca eliminada" });
-          queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
-        }
-      });
-    }
+  const handleDelete = async (id: number) => {
+    const result = await confirmDelete("esta marca");
+    if (!result.isConfirmed) return;
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => {
+        Toast.fire({ icon: "success", title: "Marca eliminada" });
+        queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      }
+    });
   };
 
   const filteredBrands = brands?.filter(b => b.name.toLowerCase().includes(search.toLowerCase()));

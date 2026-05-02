@@ -5,20 +5,11 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { BoletaModal } from "@/components/boleta-modal";
-import Swal from "sweetalert2";
-
-const Toast = Swal.mixin({
-  toast: true,
-  position: "top-end",
-  showConfirmButton: false,
-  timer: 2500,
-  timerProgressBar: true,
-  customClass: { popup: "!rounded-xl !text-sm !font-medium" },
-});
+import { Toast, Swal } from "@/lib/swal";
 
 interface CartItem {
   productId: number;
@@ -65,6 +56,7 @@ export default function POS() {
   const [notes, setNotes] = useState("");
   const [completedSale, setCompletedSale] = useState<CompletedSaleForModal | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [cashReceived, setCashReceived] = useState<string>("");
   const [pendingQty, setPendingQty] = useState(1);
   const [suspendedSales, setSuspendedSales] = useState<SuspendedSale[]>([]);
   const [showSuspended, setShowSuspended] = useState(false);
@@ -303,6 +295,7 @@ export default function POS() {
     const customerIdSnapshot = customerId;
     const paymentMethodSnapshot = paymentMethod;
     const notesSnapshot = notes;
+    const cashReceivedSnapshot = cashReceived;
 
     createSale.mutate({
       data: {
@@ -338,6 +331,13 @@ export default function POS() {
         setCustomerId("none");
         setCustomerSearch("");
         setNotes("");
+        setCashReceived("");
+        if (paymentMethodSnapshot === "Efectivo" && cashReceivedSnapshot) {
+          const change = parseFloat(cashReceivedSnapshot) - sale.total;
+          if (change > 0) {
+            Toast.fire({ icon: "success", title: "Cambio a entregar", text: formatCurrency(change, currencySymbol), timer: 4000 });
+          }
+        }
         queryClient.invalidateQueries({ queryKey: ["/api/products"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       },
@@ -713,6 +713,59 @@ export default function POS() {
             </Select>
           </div>
 
+          {/* Cash received calculator — only for Efectivo */}
+          {paymentMethod === "Efectivo" && (
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Banknote className="w-3.5 h-3.5" /> Efectivo recibido
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {total > 0 && (() => {
+                  const ceil5 = Math.ceil(total / 5) * 5;
+                  return [...new Set([ceil5, ceil5 + 5, ceil5 + 10, ceil5 + 20, ceil5 + 50])]
+                    .filter(v => v >= total)
+                    .slice(0, 5)
+                    .map(amount => (
+                      <button
+                        key={amount}
+                        type="button"
+                        onClick={() => setCashReceived(amount.toFixed(2))}
+                        className="text-[10px] font-semibold px-2.5 py-1 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        {formatCurrency(amount, currencySymbol)}
+                      </button>
+                    ));
+                })()}
+              </div>
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                placeholder={total > 0 ? `Mín. ${formatCurrency(total, currencySymbol)}` : "0.00"}
+                value={cashReceived}
+                onChange={e => setCashReceived(e.target.value)}
+                className="h-9 text-sm rounded-xl"
+              />
+              {cashReceived !== "" && (
+                <div className={`flex justify-between items-center px-3 py-2 rounded-xl ${
+                  parseFloat(cashReceived) >= total
+                    ? "bg-green-50 border border-green-200"
+                    : "bg-red-50 border border-red-200"
+                }`}>
+                  <span className={`text-xs font-medium ${parseFloat(cashReceived) >= total ? "text-green-700" : "text-red-600"}`}>
+                    {parseFloat(cashReceived) >= total ? "Cambio" : "Faltan"}
+                  </span>
+                  <span className={`text-base font-bold ${parseFloat(cashReceived) >= total ? "text-green-700" : "text-red-600"}`}>
+                    {parseFloat(cashReceived) >= total
+                      ? formatCurrency(parseFloat(cashReceived) - total, currencySymbol)
+                      : formatCurrency(total - parseFloat(cashReceived), currencySymbol)
+                    }
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Notes */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Nota Adicional</label>
@@ -754,7 +807,7 @@ export default function POS() {
           {/* Pay button — Perfisoft pill style */}
           <button
             onClick={processSale}
-            disabled={cart.length === 0 || createSale.isPending}
+            disabled={cart.length === 0 || createSale.isPending || (paymentMethod === "Efectivo" && cashReceived !== "" && parseFloat(cashReceived) < total)}
             className="w-full h-12 bg-primary text-white font-bold text-sm rounded-full hover:bg-primary/90 active:scale-[0.98] transition-all shadow-md shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {createSale.isPending ? (

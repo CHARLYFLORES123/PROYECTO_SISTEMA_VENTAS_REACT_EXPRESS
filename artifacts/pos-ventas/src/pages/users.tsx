@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useToast } from "@/hooks/use-toast";
+import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { format } from "date-fns";
 
@@ -29,7 +29,6 @@ export default function Users() {
   const updateMutation = useUpdateUser();
   const deleteMutation = useDeleteUser();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -56,7 +55,7 @@ export default function Users() {
       const data = { name: values.name, email: values.email, role: values.role, ...(values.password ? { password: values.password } : {}) };
       updateMutation.mutate({ id: editingId, data }, {
         onSuccess: () => {
-          toast({ title: "Usuario actualizado" });
+          Toast.fire({ icon: "success", title: "Usuario actualizado" });
           queryClient.invalidateQueries({ queryKey: ["/api/users"] });
           setIsOpen(false);
         }
@@ -68,7 +67,7 @@ export default function Users() {
       }
       createMutation.mutate({ data: values as any }, {
         onSuccess: () => {
-          toast({ title: "Usuario creado" });
+          Toast.fire({ icon: "success", title: "Usuario creado" });
           queryClient.invalidateQueries({ queryKey: ["/api/users"] });
           setIsOpen(false);
         }
@@ -76,15 +75,15 @@ export default function Users() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("¿Estás seguro de eliminar este usuario?")) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: "Usuario eliminado" });
-          queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-        }
-      });
-    }
+  const handleDelete = async (id: number) => {
+    const result = await confirmDelete("este usuario");
+    if (!result.isConfirmed) return;
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => {
+        Toast.fire({ icon: "success", title: "Usuario eliminado" });
+        queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      }
+    });
   };
 
   return (

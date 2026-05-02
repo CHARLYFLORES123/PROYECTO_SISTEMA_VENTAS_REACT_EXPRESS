@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useToast } from "@/hooks/use-toast";
+import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus } from "lucide-react";
 
 const schema = z.object({
@@ -27,7 +27,6 @@ export default function PaymentMethods() {
   const updateMutation = useUpdatePaymentMethod();
   const deleteMutation = useDeletePaymentMethod();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -54,7 +53,7 @@ export default function PaymentMethods() {
     if (editingId) {
       updateMutation.mutate({ id: editingId, data }, {
         onSuccess: () => {
-          toast({ title: "Método actualizado" });
+          Toast.fire({ icon: "success", title: "Método actualizado" });
           queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
           setIsOpen(false);
         }
@@ -62,7 +61,7 @@ export default function PaymentMethods() {
     } else {
       createMutation.mutate({ data }, {
         onSuccess: () => {
-          toast({ title: "Método creado" });
+          Toast.fire({ icon: "success", title: "Método creado" });
           queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
           setIsOpen(false);
         }
@@ -70,15 +69,15 @@ export default function PaymentMethods() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("¿Estás seguro de eliminar este método?")) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: "Método eliminado" });
-          queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
-        }
-      });
-    }
+  const handleDelete = async (id: number) => {
+    const result = await confirmDelete("este método de pago");
+    if (!result.isConfirmed) return;
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => {
+        Toast.fire({ icon: "success", title: "Método eliminado" });
+        queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
+      }
+    });
   };
 
   const toggleStatus = (id: number, currentStatus: boolean) => {

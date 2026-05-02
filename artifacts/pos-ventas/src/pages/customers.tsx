@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useToast } from "@/hooks/use-toast";
+import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
 
 const customerSchema = z.object({
@@ -29,7 +29,6 @@ export default function Customers() {
   const updateMutation = useUpdateCustomer();
   const deleteMutation = useDeleteCustomer();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -69,7 +68,7 @@ export default function Customers() {
     if (editingId) {
       updateMutation.mutate({ id: editingId, data }, {
         onSuccess: () => {
-          toast({ title: "Cliente actualizado" });
+          Toast.fire({ icon: "success", title: "Cliente actualizado" });
           queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
           setIsOpen(false);
         }
@@ -77,7 +76,7 @@ export default function Customers() {
     } else {
       createMutation.mutate({ data }, {
         onSuccess: () => {
-          toast({ title: "Cliente registrado" });
+          Toast.fire({ icon: "success", title: "Cliente registrado" });
           queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
           setIsOpen(false);
         }
@@ -85,15 +84,15 @@ export default function Customers() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("¿Estás seguro de eliminar este cliente?")) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: "Cliente eliminado" });
-          queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-        }
-      });
-    }
+  const handleDelete = async (id: number) => {
+    const result = await confirmDelete("este cliente");
+    if (!result.isConfirmed) return;
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => {
+        Toast.fire({ icon: "success", title: "Cliente eliminado" });
+        queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      }
+    });
   };
 
   return (

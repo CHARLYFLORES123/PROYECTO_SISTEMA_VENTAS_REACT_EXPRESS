@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useToast } from "@/hooks/use-toast";
+import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus } from "lucide-react";
 
 const categorySchema = z.object({
@@ -24,7 +24,6 @@ export default function Categories() {
   const updateMutation = useUpdateCategory();
   const deleteMutation = useDeleteCategory();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -50,7 +49,7 @@ export default function Categories() {
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: values }, {
         onSuccess: () => {
-          toast({ title: "Categoría actualizada" });
+          Toast.fire({ icon: "success", title: "Categoría actualizada" });
           queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
           setIsOpen(false);
         }
@@ -58,7 +57,7 @@ export default function Categories() {
     } else {
       createMutation.mutate({ data: values }, {
         onSuccess: () => {
-          toast({ title: "Categoría creada" });
+          Toast.fire({ icon: "success", title: "Categoría creada" });
           queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
           setIsOpen(false);
         }
@@ -66,15 +65,15 @@ export default function Categories() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("¿Estás seguro de eliminar esta categoría?")) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: "Categoría eliminada" });
-          queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
-        }
-      });
-    }
+  const handleDelete = async (id: number) => {
+    const result = await confirmDelete("esta categoría");
+    if (!result.isConfirmed) return;
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => {
+        Toast.fire({ icon: "success", title: "Categoría eliminada" });
+        queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+      }
+    });
   };
 
   if (isLoading) return <div>Cargando...</div>;

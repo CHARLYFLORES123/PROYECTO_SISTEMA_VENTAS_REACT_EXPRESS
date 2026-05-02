@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Eye, MoreHorizontal, XCircle, Filter, Download, Plus, Search } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Toast, Swal } from "@/lib/swal";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import * as XLSX from "xlsx";
@@ -18,7 +18,6 @@ export default function Sales() {
   const [dateTo, setDateTo] = useState("");
   const [customerId, setCustomerId] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currencySymbol } = useCurrency();
 
@@ -30,16 +29,26 @@ export default function Sales() {
   const { data: customers } = useGetCustomers();
   const cancelSale = useCancelSale();
 
-  const handleCancel = (id: number) => {
-    if (!confirm("¿Deseas anular esta venta? Esta acción restaurará el stock.")) return;
+  const handleCancel = async (id: number) => {
+    const result = await Swal.fire({
+      title: "¿Anular venta?",
+      text: "Esta acción restaurará el stock de los productos.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonText: "No, mantener",
+      confirmButtonText: "Sí, anular",
+      reverseButtons: true,
+    });
+    if (!result.isConfirmed) return;
     cancelSale.mutate({ id }, {
       onSuccess: () => {
-        toast({ title: `✓ Venta #${String(id).padStart(6, "0")} anulada`, description: "El stock fue restaurado correctamente." });
+        Toast.fire({ icon: "success", title: `Venta #${String(id).padStart(6, "0")} anulada` });
         queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
         queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       },
       onError: (err: any) => {
-        toast({ title: "Error al anular venta", description: err.message, variant: "destructive" });
+        Swal.fire({ icon: "error", title: "Error al anular venta", text: err.message });
       },
     });
   };

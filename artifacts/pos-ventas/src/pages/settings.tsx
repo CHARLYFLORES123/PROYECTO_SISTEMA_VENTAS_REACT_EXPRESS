@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useToast } from "@/hooks/use-toast";
+import { Toast } from "@/lib/swal";
 import { useCurrency } from "@/contexts/currency-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { ImageUpload } from "@/components/image-upload";
@@ -37,7 +37,6 @@ export default function Settings() {
   const { data: settings, isLoading } = useGetBusinessSettings();
   const updateMutation = useUpdateBusinessSettings();
   const { setCurrency } = useCurrency();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const form = useForm<z.infer<typeof schema>>({
@@ -72,7 +71,7 @@ export default function Settings() {
       }
     }, {
       onSuccess: () => {
-        toast({ title: "Configuración guardada exitosamente" });
+        Toast.fire({ icon: "success", title: "Configuración guardada exitosamente" });
         setCurrency(values.currency, values.currencySymbol);
         queryClient.invalidateQueries({ queryKey: ["/api/business-settings"] });
       }

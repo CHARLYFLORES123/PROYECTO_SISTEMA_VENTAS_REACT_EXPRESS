@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useToast } from "@/hooks/use-toast";
+import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
 
 const schema = z.object({
@@ -30,7 +30,6 @@ export default function Suppliers() {
   const updateMutation = useUpdateSupplier();
   const deleteMutation = useDeleteSupplier();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -71,7 +70,7 @@ export default function Suppliers() {
     if (editingId) {
       updateMutation.mutate({ id: editingId, data }, {
         onSuccess: () => {
-          toast({ title: "Proveedor actualizado" });
+          Toast.fire({ icon: "success", title: "Proveedor actualizado" });
           queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
           setIsOpen(false);
         }
@@ -79,7 +78,7 @@ export default function Suppliers() {
     } else {
       createMutation.mutate({ data }, {
         onSuccess: () => {
-          toast({ title: "Proveedor creado" });
+          Toast.fire({ icon: "success", title: "Proveedor creado" });
           queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
           setIsOpen(false);
         }
@@ -87,15 +86,15 @@ export default function Suppliers() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("¿Estás seguro de eliminar este proveedor?")) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: "Proveedor eliminado" });
-          queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
-        }
-      });
-    }
+  const handleDelete = async (id: number) => {
+    const result = await confirmDelete("este proveedor");
+    if (!result.isConfirmed) return;
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => {
+        Toast.fire({ icon: "success", title: "Proveedor eliminado" });
+        queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
+      }
+    });
   };
 
   const filteredSuppliers = suppliers?.filter(s => 
