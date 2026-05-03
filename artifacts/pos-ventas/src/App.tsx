@@ -26,6 +26,7 @@ import Reports from "@/pages/reports";
 import CierreCaja from "@/pages/cierre-caja";
 import CustomerStatement from "@/pages/customer-statement";
 import Loyalty from "@/pages/loyalty";
+import LoyaltySummary from "@/pages/loyalty-summary";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ function AuthenticatedRoutes() {
         <Route path="/cierre-caja" component={CierreCaja} />
         <Route path="/customers/:id/statement" component={CustomerStatement} />
         <Route path="/loyalty" component={Loyalty} />
+        <Route path="/loyalty/:id/summary" component={LoyaltySummary} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
@@ -73,7 +75,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <CurrencyProvider>
         <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "") }>
             <Router />
           </WouterRouter>
           <Toaster />
