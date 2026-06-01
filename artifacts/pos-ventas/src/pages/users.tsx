@@ -16,11 +16,25 @@ import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { format } from "date-fns";
 
+const ROLES = [
+  { value: "admin",      label: "Admin" },
+  { value: "vendedor",   label: "Vendedor" },
+  { value: "inventario", label: "Inventario" },
+  { value: "compras",    label: "Compras" },
+];
+
+const ROLE_BADGE: Record<string, string> = {
+  admin:      "default",
+  vendedor:   "secondary",
+  inventario: "outline",
+  compras:    "outline",
+};
+
 const schema = z.object({
   name: z.string().min(2, "Requerido"),
   email: z.string().email("Email inválido"),
   password: z.string().optional(),
-  role: z.enum(["Admin", "Vendedor"]),
+  role: z.enum(["admin", "vendedor", "inventario", "compras"]),
 });
 
 export default function Users() {
@@ -35,18 +49,20 @@ export default function Users() {
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", email: "", password: "", role: "Vendedor" },
+    defaultValues: { name: "", email: "", password: "", role: "vendedor" },
   });
 
   const handleOpenCreate = () => {
     setEditingId(null);
-    form.reset({ name: "", email: "", password: "", role: "Vendedor" });
+    form.reset({ name: "", email: "", password: "", role: "vendedor" });
     setIsOpen(true);
   };
 
   const handleOpenEdit = (user: any) => {
     setEditingId(user.id);
-    form.reset({ name: user.name, email: user.email, password: "", role: user.role });
+    const role = user.role?.toLowerCase();
+    const validRole = ["admin", "vendedor", "inventario", "compras"].includes(role) ? role : "vendedor";
+    form.reset({ name: user.name, email: user.email, password: "", role: validRole });
     setIsOpen(true);
   };
 
@@ -94,7 +110,7 @@ export default function Users() {
           <DialogTrigger asChild>
             <Button onClick={handleOpenCreate}><Plus className="h-4 w-4 mr-2" /> Nuevo Usuario</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent aria-describedby={undefined}>
             <DialogHeader><DialogTitle>{editingId ? "Editar Usuario" : "Nuevo Usuario"}</DialogTitle></DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -113,11 +129,16 @@ export default function Users() {
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                       <SelectContent>
-                        <SelectItem value="Admin">Admin</SelectItem>
-                        <SelectItem value="Vendedor">Vendedor</SelectItem>
+                        {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                    <p className="text-[11px] text-muted-foreground">
+                      {field.value === "vendedor" && "Accede solo a: Nueva Venta, Historial, Clientes"}
+                      {field.value === "inventario" && "Accede solo a: Productos, Categorías, Marcas, Inventario"}
+                      {field.value === "compras" && "Accede solo a: Proveedores, Cotizaciones"}
+                      {field.value === "admin" && "Acceso completo al sistema"}
+                    </p>
                   </FormItem>
                 )} />
                 <div className="flex justify-end gap-2 mt-4">
@@ -133,20 +154,44 @@ export default function Users() {
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Correo</TableHead><TableHead>Rol</TableHead><TableHead>Fecha Registro</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Correo</TableHead>
+                <TableHead>Rol</TableHead>
+                <TableHead>Acceso</TableHead>
+                <TableHead>Fecha Registro</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {isLoading ? <TableRow><TableCell colSpan={5} className="text-center py-4">Cargando...</TableCell></TableRow> : users?.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.name}</TableCell>
-                  <TableCell>{u.email}</TableCell>
-                  <TableCell><Badge variant={u.role === "Admin" ? "default" : "secondary"}>{u.role}</Badge></TableCell>
-                  <TableCell>{format(new Date(u.createdAt), "dd/MM/yyyy")}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(u)}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(u.id)}><Trash2 className="h-4 w-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {isLoading ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-4">Cargando...</TableCell></TableRow>
+              ) : users?.map((u) => {
+                const role = u.role?.toLowerCase() ?? "vendedor";
+                const roleLabel = ROLES.find(r => r.value === role)?.label ?? u.role;
+                const accessDesc: Record<string, string> = {
+                  admin:      "Acceso completo",
+                  vendedor:   "Ventas · Clientes",
+                  inventario: "Productos · Inventario",
+                  compras:    "Proveedores · Cotizaciones",
+                };
+                return (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.name}</TableCell>
+                    <TableCell>{u.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={ROLE_BADGE[role] as any ?? "secondary"}>{roleLabel}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{accessDesc[role] ?? "—"}</TableCell>
+                    <TableCell>{format(new Date(u.createdAt), "dd/MM/yyyy")}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(u)}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(u.id)}><Trash2 className="h-4 w-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

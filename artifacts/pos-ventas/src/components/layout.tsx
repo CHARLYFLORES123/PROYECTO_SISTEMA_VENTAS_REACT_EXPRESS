@@ -27,55 +27,87 @@ import {
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/currency-context";
 
-const NAV_GROUPS = [
+// ── Role definitions ──────────────────────────────────────────────────────────
+
+export const ROLE_DEFAULT_ROUTE: Record<string, string> = {
+  admin:      "/dashboard",
+  vendedor:   "/pos",
+  inventario: "/products",
+  compras:    "/suppliers",
+};
+
+/** Paths a role is allowed to visit. Empty array = all allowed (admin). */
+const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
+  admin:      [],
+  vendedor:   ["/pos", "/sales", "/customers"],
+  inventario: ["/products", "/categories", "/brands", "/inventory"],
+  compras:    ["/suppliers", "/quotes"],
+};
+
+function isAllowed(role: string, path: string): boolean {
+  const prefixes = ROLE_ALLOWED_PREFIXES[role];
+  if (!prefixes || prefixes.length === 0) return true; // admin
+  return prefixes.some(p => path === p || path.startsWith(p + "/"));
+}
+
+// ── Navigation structure ──────────────────────────────────────────────────────
+
+const ALL_NAV_GROUPS = [
   {
     label: "Principal",
+    roles: ["admin"],
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/pos", label: "Nueva Venta", icon: MonitorPlay },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"] },
+      { href: "/pos",       label: "Nueva Venta", icon: MonitorPlay,    roles: ["admin", "vendedor"] },
     ],
   },
   {
     label: "Ventas",
+    roles: ["admin", "vendedor"],
     items: [
-      { href: "/sales", label: "Historial", icon: ShoppingCart },
-      { href: "/cierre-caja", label: "Cierre de Caja", icon: LockKeyhole },
-      { href: "/quotes", label: "Cotizaciones", icon: FileText },
-      { href: "/reports", label: "Reportes", icon: BarChart2 },
+      { href: "/sales",       label: "Historial",     icon: ShoppingCart, roles: ["admin", "vendedor"] },
+      { href: "/cierre-caja", label: "Cierre de Caja", icon: LockKeyhole, roles: ["admin"] },
+      { href: "/quotes",      label: "Cotizaciones",  icon: FileText,     roles: ["admin", "compras"] },
+      { href: "/reports",     label: "Reportes",      icon: BarChart2,    roles: ["admin"] },
     ],
   },
   {
     label: "Inventario",
+    roles: ["admin", "inventario"],
     items: [
-      { href: "/products", label: "Productos", icon: Package },
-      { href: "/categories", label: "Categorías", icon: Tags },
-      { href: "/brands", label: "Marcas", icon: Tags },
-      { href: "/inventory", label: "Inv. General", icon: ClipboardList },
+      { href: "/products",   label: "Productos",   icon: Package,      roles: ["admin", "inventario"] },
+      { href: "/categories", label: "Categorías",  icon: Tags,         roles: ["admin", "inventario"] },
+      { href: "/brands",     label: "Marcas",      icon: Tags,         roles: ["admin", "inventario"] },
+      { href: "/inventory",  label: "Inv. General", icon: ClipboardList, roles: ["admin", "inventario"] },
     ],
   },
   {
     label: "Contactos",
+    roles: ["admin", "vendedor", "compras"],
     items: [
-      { href: "/customers", label: "Clientes", icon: Users },
-      { href: "/suppliers", label: "Proveedores", icon: Truck },
-      { href: "/loyalty", label: "Fidelización", icon: Star },
+      { href: "/customers",  label: "Clientes",      icon: Users, roles: ["admin", "vendedor"] },
+      { href: "/suppliers",  label: "Proveedores",   icon: Truck, roles: ["admin", "compras"] },
+      { href: "/loyalty",    label: "Fidelización",  icon: Star,  roles: ["admin"] },
     ],
   },
 ];
 
 const ADMIN_GROUP = {
   label: "Administración",
+  roles: ["admin"],
   items: [
-    { href: "/users", label: "Usuarios", icon: UserCog },
-    { href: "/payment-methods", label: "Métodos de Pago", icon: CreditCard },
-    { href: "/settings", label: "Configuración", icon: Settings },
+    { href: "/users",           label: "Usuarios",          icon: UserCog  },
+    { href: "/payment-methods", label: "Métodos de Pago",   icon: CreditCard },
+    { href: "/settings",        label: "Configuración",     icon: Settings },
   ],
 };
 
 const ALL_NAV_ITEMS = [
-  ...NAV_GROUPS.flatMap(g => g.items),
+  ...ALL_NAV_GROUPS.flatMap(g => g.items),
   ...ADMIN_GROUP.items,
 ];
+
+// ── Layout component ──────────────────────────────────────────────────────────
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -97,6 +129,16 @@ export function Layout({ children }: { children: ReactNode }) {
     }
   }, [isError, setLocation]);
 
+  // Role-based route guard
+  useEffect(() => {
+    if (!user) return;
+    const role = (user.role ?? "admin").toLowerCase();
+    if (role === "admin") return;
+    if (!isAllowed(role, location)) {
+      setLocation(ROLE_DEFAULT_ROUTE[role] ?? "/pos");
+    }
+  }, [user, location, setLocation]);
+
   const handleLogout = () => {
     clearToken();
     setLocation("/");
@@ -115,19 +157,42 @@ export function Layout({ children }: { children: ReactNode }) {
     );
   }
 
-  const currentNavItem = ALL_NAV_ITEMS.find(item => location.startsWith(item.href));
+  const userRole = (user.role ?? "admin").toLowerCase();
+  const currentNavItem = ALL_NAV_ITEMS.find(item => location === item.href || location.startsWith(item.href + "/"));
+
+  // Filter nav groups for current role
+  const visibleGroups = ALL_NAV_GROUPS.map(group => ({
+    ...group,
+    items: group.items.filter(item => item.roles.includes(userRole)),
+  })).filter(group => group.items.length > 0);
+
+  const showAdminGroup = userRole === "admin";
+
+  const NavItem = ({ item, onClick }: { item: { href: string; label: string; icon: React.ElementType }; onClick?: () => void }) => {
+    const active = location === item.href || location.startsWith(item.href + "/");
+    return (
+      <li>
+        <Link href={item.href} onClick={onClick}>
+          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer group ${
+            active
+              ? "bg-primary text-white font-medium shadow-sm shadow-primary/20"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          }`}>
+            <item.icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-muted-foreground group-hover:text-sidebar-accent-foreground"}`} />
+            <span className="flex-1 truncate">{item.label}</span>
+            {active && <ChevronRight className="w-3.5 h-3.5 text-white/70 shrink-0" />}
+          </div>
+        </Link>
+      </li>
+    );
+  };
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b border-sidebar-border shrink-0">
         {settings?.logoUrl ? (
-          <img
-            src={settings.logoUrl}
-            alt="Logo"
-            className="h-8 max-w-[120px] object-contain"
-            onError={(e) => (e.currentTarget.style.display = "none")}
-          />
+          <img src={settings.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
         ) : (
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
@@ -138,72 +203,30 @@ export function Layout({ children }: { children: ReactNode }) {
             </span>
           </div>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-auto md:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
-          onClick={() => setSidebarOpen(false)}
-        >
+        <Button variant="ghost" size="icon" className="ml-auto md:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground" onClick={() => setSidebarOpen(false)}>
           <X className="w-4 h-4" />
         </Button>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-3">
-        {NAV_GROUPS.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label} className="mb-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-2 mb-1">
-              {group.label}
-            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-2 mb-1">{group.label}</p>
             <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const active = location === item.href || location.startsWith(item.href + "/");
-                return (
-                  <li key={item.href}>
-                    <Link href={item.href} onClick={() => setSidebarOpen(false)}>
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer group ${
-                        active
-                          ? "bg-primary text-white font-medium shadow-sm shadow-primary/20"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      }`}>
-                        <item.icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-muted-foreground group-hover:text-sidebar-accent-foreground"}`} />
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {active && <ChevronRight className="w-3.5 h-3.5 text-white/70 shrink-0" />}
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
+              {group.items.map((item) => <NavItem key={item.href} item={item} onClick={() => setSidebarOpen(false)} />)}
             </ul>
           </div>
         ))}
 
-        {/* Admin section */}
-        <div className="mb-4">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-2 mb-1">
-            {ADMIN_GROUP.label}
-          </p>
-          <ul className="space-y-0.5">
-            {ADMIN_GROUP.items.map((item) => {
-              const active = location === item.href || location.startsWith(item.href + "/");
-              return (
-                <li key={item.href}>
-                  <Link href={item.href} onClick={() => setSidebarOpen(false)}>
-                    <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer group ${
-                      active
-                        ? "bg-primary text-white font-medium shadow-sm shadow-primary/20"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    }`}>
-                      <item.icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-muted-foreground group-hover:text-sidebar-accent-foreground"}`} />
-                      <span className="flex-1 truncate">{item.label}</span>
-                      {active && <ChevronRight className="w-3.5 h-3.5 text-white/70 shrink-0" />}
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        {showAdminGroup && (
+          <div className="mb-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-2 mb-1">{ADMIN_GROUP.label}</p>
+            <ul className="space-y-0.5">
+              {ADMIN_GROUP.items.map((item) => <NavItem key={item.href} item={item} onClick={() => setSidebarOpen(false)} />)}
+            </ul>
+          </div>
+        )}
       </nav>
 
       {/* User footer */}
@@ -214,15 +237,9 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
           <div className="flex-1 overflow-hidden">
             <p className="text-sm font-semibold text-sidebar-foreground truncate">{user.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{user.role}</p>
+            <p className="text-xs text-muted-foreground truncate capitalize">{user.role}</p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="w-7 h-7 text-muted-foreground hover:text-destructive shrink-0"
-            onClick={handleLogout}
-            title="Cerrar Sesión"
-          >
+          <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive shrink-0" onClick={handleLogout} title="Cerrar Sesión">
             <LogOut className="w-3.5 h-3.5" />
           </Button>
         </div>
@@ -232,41 +249,23 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      {/* Sidebar */}
       <aside className={`fixed md:static inset-y-0 left-0 z-50 w-60 bg-sidebar border-r border-sidebar-border transform transition-transform duration-200 ease-in-out ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       } flex flex-col shadow-sm`}>
         <SidebarContent />
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top header */}
         <header className="h-14 flex items-center justify-between px-4 sm:px-6 bg-card border-b border-border z-30 shrink-0 shadow-sm">
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden w-8 h-8"
-              onClick={() => setSidebarOpen(true)}
-            >
+            <Button variant="ghost" size="icon" className="md:hidden w-8 h-8" onClick={() => setSidebarOpen(true)}>
               <Menu className="w-4 h-4" />
             </Button>
-            <div className="flex items-center gap-2">
-              <nav className="flex items-center text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {currentNavItem?.label || "POS Ventas"}
-                </span>
-              </nav>
-            </div>
+            <nav className="flex items-center text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{currentNavItem?.label || "POS Ventas"}</span>
+            </nav>
           </div>
 
           <div className="flex items-center gap-3">
