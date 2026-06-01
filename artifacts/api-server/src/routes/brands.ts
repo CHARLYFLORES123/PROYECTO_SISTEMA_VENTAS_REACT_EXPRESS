@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, brandsTable, productsTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
 import { CreateBrandBody } from "@workspace/api-zod";
-import { verifyToken } from "../middlewares/auth";
+import { verifyToken, requireRoles, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
+
+const canWrite = requireRoles(["admin", "inventario"]);
 
 function fmt(b: any, productCount = 0) {
   return { id: b.id, name: b.name, description: b.description ?? null, productCount, createdAt: b.createdAt instanceof Date ? b.createdAt.toISOString() : b.createdAt };
@@ -22,7 +24,8 @@ router.get("/", async (req, res) => {
   } catch (err) { req.log.error({ err }, "GetBrands error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-router.post("/", async (req, res) => {
+// POST — inventario + admin
+router.post("/", canWrite, async (req, res) => {
   const parsed = CreateBrandBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
   try {
@@ -31,7 +34,8 @@ router.post("/", async (req, res) => {
   } catch (err) { req.log.error({ err }, "CreateBrand error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-router.put("/:id", async (req, res) => {
+// PUT — inventario + admin
+router.put("/:id", canWrite, async (req, res) => {
   const id = Number(req.params.id);
   const parsed = CreateBrandBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
@@ -42,7 +46,8 @@ router.put("/:id", async (req, res) => {
   } catch (err) { req.log.error({ err }, "UpdateBrand error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-router.delete("/:id", async (req, res) => {
+// DELETE — admin only
+router.delete("/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   try {
     await db.delete(brandsTable).where(eq(brandsTable.id, id));

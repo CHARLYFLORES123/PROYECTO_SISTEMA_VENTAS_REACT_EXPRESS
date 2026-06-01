@@ -31,3 +31,16 @@ export function verifyToken(req: AuthRequest, res: Response, next: NextFunction)
 export function signToken(userId: number, role: string): string {
   return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "7d" });
 }
+
+export function requireRoles(allowed: string[]): (req: AuthRequest, res: Response, next: NextFunction) => void {
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    const role = req.userRole ?? "";
+    if (!allowed.includes(role)) {
+      res.status(403).json({ message: "No tienes permiso para realizar esta acción" });
+      return;
+    }
+    next();
+  };
+}
+
+export const requireAdmin = requireRoles(["admin"]);

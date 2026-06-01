@@ -2,11 +2,13 @@ import { Router } from "express";
 import { db, salesTable, saleDetailsTable, productsTable, customersTable, usersTable, businessSettingsTable } from "@workspace/db";
 import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { CreateSaleBody } from "@workspace/api-zod";
-import { verifyToken, AuthRequest } from "../middlewares/auth";
+import { verifyToken, requireRoles, requireAdmin, AuthRequest } from "../middlewares/auth";
 import { awardPointsForSale } from "./loyalty";
 
 const router = Router();
 router.use(verifyToken);
+
+const canCreate = requireRoles(["admin", "vendedor"]);
 
 const IVA_RATE = 0.13;
 
@@ -57,8 +59,8 @@ router.get("/", async (req: AuthRequest, res) => {
   }
 });
 
-// POST /api/sales — transactional
-router.post("/", async (req: AuthRequest, res) => {
+// POST /api/sales — vendedor + admin
+router.post("/", canCreate, async (req: AuthRequest, res) => {
   const parsed = CreateSaleBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
 
@@ -130,7 +132,7 @@ router.post("/", async (req: AuthRequest, res) => {
 
     const pointsEarned = (() => {
       try {
-        return 0; // points are awarded async above; return 0 as placeholder
+        return 0;
       } catch { return 0; }
     })();
 
@@ -169,8 +171,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/sales/:id/cancel
-router.post("/:id/cancel", async (req, res) => {
+// POST /api/sales/:id/cancel — admin only
+router.post("/:id/cancel", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   try {
     const [sale] = await db.select().from(salesTable).where(eq(salesTable.id, id)).limit(1);

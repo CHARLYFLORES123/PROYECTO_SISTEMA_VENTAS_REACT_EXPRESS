@@ -17,6 +17,7 @@ import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus, Search, AlertTriangle, Image as ImageIcon } from "lucide-react";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { ImageUpload } from "@/components/image-upload";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const productSchema = z.object({
   name: z.string().min(2, "Requerido"),
@@ -36,6 +37,7 @@ export default function Products() {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterBrand, setFilterBrand] = useState<string>("all");
   const { currencySymbol } = useCurrency();
+  const { can } = usePermissions();
   
   const { data: products, isLoading } = useGetProducts({ 
     search: search || undefined, 
@@ -123,6 +125,10 @@ export default function Products() {
     });
   };
 
+  const canCreate = can("products", "create");
+  const canUpdate = can("products", "update");
+  const canDelete = can("products", "delete");
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -159,93 +165,95 @@ export default function Products() {
               ))}
             </SelectContent>
           </Select>
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={handleOpenCreate}>
-                <Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nuevo</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>{editingId ? "Editar Producto" : "Nuevo Producto"}</DialogTitle>
-              </DialogHeader>
-              <ScrollArea className="max-h-[80vh] p-4 -m-4">
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-4 md:col-span-2">
-                      <FormField control={form.control} name="name" render={({ field }) => (
-                        <FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+          {canCreate && (
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={handleOpenCreate}>
+                  <Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nuevo</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>{editingId ? "Editar Producto" : "Nuevo Producto"}</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="max-h-[80vh] p-4 -m-4">
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-4 md:col-span-2">
+                        <FormField control={form.control} name="name" render={({ field }) => (
+                          <FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                      </div>
+                      <FormField control={form.control} name="barcode" render={({ field }) => (
+                        <FormItem><FormLabel>Código de Barras</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
                       )} />
-                    </div>
-                    <FormField control={form.control} name="barcode" render={({ field }) => (
-                      <FormItem><FormLabel>Código de Barras</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="categoryId" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Categoría</FormLabel>
-                        <Select onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} value={field.value?.toString() || "none"}>
+                      <FormField control={form.control} name="categoryId" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Categoría</FormLabel>
+                          <Select onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} value={field.value?.toString() || "none"}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">Ninguna</SelectItem>
+                              {categories?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="brandId" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Marca</FormLabel>
+                          <Select onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} value={field.value?.toString() || "none"}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">Ninguna</SelectItem>
+                              {brands?.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="purchasePrice" render={({ field }) => (
+                        <FormItem><FormLabel>Precio Compra</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name="salePrice" render={({ field }) => (
+                        <FormItem><FormLabel>Precio Venta</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name="stock" render={({ field }) => (
+                        <FormItem><FormLabel>Stock Actual</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name="minStock" render={({ field }) => (
+                        <FormItem><FormLabel>Stock Mínimo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name="imageUrl" render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>Imagen del Producto</FormLabel>
                           <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                            <ImageUpload
+                              value={field.value}
+                              onChange={(val) => field.onChange(val ?? "")}
+                              maxWidthPx={500}
+                              maxHeightPx={500}
+                              label="Subir imagen desde mis archivos"
+                            />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">Ninguna</SelectItem>
-                            {categories?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={form.control} name="brandId" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Marca</FormLabel>
-                        <Select onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} value={field.value?.toString() || "none"}>
-                          <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">Ninguna</SelectItem>
-                            {brands?.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={form.control} name="purchasePrice" render={({ field }) => (
-                      <FormItem><FormLabel>Precio Compra</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="salePrice" render={({ field }) => (
-                      <FormItem><FormLabel>Precio Venta</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="stock" render={({ field }) => (
-                      <FormItem><FormLabel>Stock Actual</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="minStock" render={({ field }) => (
-                      <FormItem><FormLabel>Stock Mínimo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="imageUrl" render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>Imagen del Producto</FormLabel>
-                        <FormControl>
-                          <ImageUpload
-                            value={field.value}
-                            onChange={(val) => field.onChange(val ?? "")}
-                            maxWidthPx={500}
-                            maxHeightPx={500}
-                            label="Subir imagen desde mis archivos"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <div className="md:col-span-2 flex justify-end gap-2 mt-4">
-                      <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                      <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>Guardar</Button>
-                    </div>
-                  </form>
-                </Form>
-              </ScrollArea>
-            </DialogContent>
-          </Dialog>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <div className="md:col-span-2 flex justify-end gap-2 mt-4">
+                        <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                        <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>Guardar</Button>
+                      </div>
+                    </form>
+                  </Form>
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
@@ -260,12 +268,12 @@ export default function Products() {
                 <TableHead className="text-right">Precio</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
                 <TableHead className="text-center">Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                {(canUpdate || canDelete) && <TableHead className="text-right">Acciones</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-4">Cargando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canUpdate || canDelete ? 7 : 6} className="text-center py-4">Cargando...</TableCell></TableRow>
               ) : products?.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell>
@@ -298,19 +306,25 @@ export default function Products() {
                       <Badge variant="outline" className="border-success text-success-foreground bg-success/10">OK</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(p)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(p.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
+                  {(canUpdate || canDelete) && (
+                    <TableCell className="text-right space-x-2">
+                      {canUpdate && (
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(p)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(p.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {products?.length === 0 && !isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canUpdate || canDelete ? 7 : 6} className="text-center py-8 text-muted-foreground">
                     No se encontraron productos.
                   </TableCell>
                 </TableRow>
@@ -319,6 +333,77 @@ export default function Products() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit dialog (opened when canCreate is false but canUpdate is true) */}
+      {canUpdate && !canCreate && (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Editar Producto</DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="max-h-[80vh] p-4 -m-4">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4 md:col-span-2">
+                    <FormField control={form.control} name="name" render={({ field }) => (
+                      <FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                  </div>
+                  <FormField control={form.control} name="barcode" render={({ field }) => (
+                    <FormItem><FormLabel>Código de Barras</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="categoryId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Categoría</FormLabel>
+                      <Select onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} value={field.value?.toString() || "none"}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Ninguna</SelectItem>
+                          {categories?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="brandId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Marca</FormLabel>
+                      <Select onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} value={field.value?.toString() || "none"}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Ninguna</SelectItem>
+                          {brands?.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="purchasePrice" render={({ field }) => (
+                    <FormItem><FormLabel>Precio Compra</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="salePrice" render={({ field }) => (
+                    <FormItem><FormLabel>Precio Venta</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="stock" render={({ field }) => (
+                    <FormItem><FormLabel>Stock Actual</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="minStock" render={({ field }) => (
+                    <FormItem><FormLabel>Stock Mínimo</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <div className="md:col-span-2 flex justify-end gap-2 mt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                    <Button type="submit" disabled={updateMutation.isPending}>Guardar</Button>
+                  </div>
+                </form>
+              </Form>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

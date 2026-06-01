@@ -37,6 +37,13 @@ const schema = z.object({
   role: z.enum(["admin", "vendedor", "inventario", "compras"]),
 });
 
+const ROLE_PERMISSIONS_SUMMARY: Record<string, string> = {
+  admin:      "Acceso completo",
+  vendedor:   "Ventas: crear · Clientes: crear, editar",
+  inventario: "Productos/Categorías/Marcas: crear, editar",
+  compras:    "Proveedores: crear, editar · Cotizaciones: crear",
+};
+
 export default function Users() {
   const { data: users, isLoading } = useGetUsers();
   const createMutation = useCreateUser();
@@ -133,11 +140,8 @@ export default function Users() {
                       </SelectContent>
                     </Select>
                     <FormMessage />
-                    <p className="text-[11px] text-muted-foreground">
-                      {field.value === "vendedor" && "Accede solo a: Nueva Venta, Historial, Clientes"}
-                      {field.value === "inventario" && "Accede solo a: Productos, Categorías, Marcas, Inventario"}
-                      {field.value === "compras" && "Accede solo a: Proveedores, Cotizaciones"}
-                      {field.value === "admin" && "Acceso completo al sistema"}
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {ROLE_PERMISSIONS_SUMMARY[field.value]}
                     </p>
                   </FormItem>
                 )} />
@@ -159,7 +163,7 @@ export default function Users() {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Correo</TableHead>
                 <TableHead>Rol</TableHead>
-                <TableHead>Acceso</TableHead>
+                <TableHead>Permisos</TableHead>
                 <TableHead>Fecha Registro</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -170,12 +174,6 @@ export default function Users() {
               ) : users?.map((u) => {
                 const role = u.role?.toLowerCase() ?? "vendedor";
                 const roleLabel = ROLES.find(r => r.value === role)?.label ?? u.role;
-                const accessDesc: Record<string, string> = {
-                  admin:      "Acceso completo",
-                  vendedor:   "Ventas · Clientes",
-                  inventario: "Productos · Inventario",
-                  compras:    "Proveedores · Cotizaciones",
-                };
                 return (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">{u.name}</TableCell>
@@ -183,7 +181,7 @@ export default function Users() {
                     <TableCell>
                       <Badge variant={ROLE_BADGE[role] as any ?? "secondary"}>{roleLabel}</Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{accessDesc[role] ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[200px]">{ROLE_PERMISSIONS_SUMMARY[role] ?? "—"}</TableCell>
                     <TableCell>{format(new Date(u.createdAt), "dd/MM/yyyy")}</TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(u)}><Pencil className="h-4 w-4" /></Button>

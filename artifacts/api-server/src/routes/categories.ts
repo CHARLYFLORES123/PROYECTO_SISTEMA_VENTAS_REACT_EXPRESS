@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, categoriesTable, productsTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
 import { CreateCategoryBody } from "@workspace/api-zod";
-import { verifyToken } from "../middlewares/auth";
+import { verifyToken, requireRoles, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
+
+const canWrite = requireRoles(["admin", "inventario"]);
 
 // GET /api/categories
 router.get("/", async (req, res) => {
@@ -30,8 +32,8 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/categories
-router.post("/", async (req, res) => {
+// POST /api/categories — inventario + admin
+router.post("/", canWrite, async (req, res) => {
   const parsed = CreateCategoryBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
 
@@ -57,8 +59,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// PUT /api/categories/:id
-router.put("/:id", async (req, res) => {
+// PUT /api/categories/:id — inventario + admin
+router.put("/:id", canWrite, async (req, res) => {
   const id = Number(req.params.id);
   const parsed = CreateCategoryBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
@@ -73,8 +75,8 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/categories/:id
-router.delete("/:id", async (req, res) => {
+// DELETE /api/categories/:id — admin only
+router.delete("/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   try {
     await db.delete(categoriesTable).where(eq(categoriesTable.id, id));

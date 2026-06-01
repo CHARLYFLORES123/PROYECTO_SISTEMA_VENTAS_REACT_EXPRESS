@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, productsTable, categoriesTable, brandsTable } from "@workspace/db";
 import { eq, ilike, and, lte, or, sql } from "drizzle-orm";
 import { CreateProductBody } from "@workspace/api-zod";
-import { verifyToken } from "../middlewares/auth";
+import { verifyToken, requireRoles, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
+
+const canWrite = requireRoles(["admin", "inventario"]);
 
 function formatProduct(p: any, categoryName?: string | null, brandName?: string | null) {
   return {
@@ -112,8 +114,8 @@ router.get("/inventory-report", async (req, res) => {
   }
 });
 
-// POST /api/products
-router.post("/", async (req, res) => {
+// POST /api/products — inventario + admin
+router.post("/", canWrite, async (req, res) => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
   try {
@@ -152,8 +154,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// PUT /api/products/:id
-router.put("/:id", async (req, res) => {
+// PUT /api/products/:id — inventario + admin
+router.put("/:id", canWrite, async (req, res) => {
   const id = Number(req.params.id);
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
@@ -171,8 +173,8 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/products/:id
-router.delete("/:id", async (req, res) => {
+// DELETE /api/products/:id — admin only
+router.delete("/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   try {
     await db.delete(productsTable).where(eq(productsTable.id, id));

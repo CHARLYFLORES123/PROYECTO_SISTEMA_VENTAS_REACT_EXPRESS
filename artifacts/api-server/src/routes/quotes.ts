@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, quotesTable, quoteDetailsTable, productsTable, customersTable, salesTable, saleDetailsTable, usersTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { CreateQuoteBody, GetSalesQueryParams } from "@workspace/api-zod";
-import { verifyToken, AuthRequest } from "../middlewares/auth";
+import { verifyToken, requireRoles, AuthRequest } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
+
+const canWrite = requireRoles(["admin", "compras"]);
 
 const IVA_RATE = 0.13;
 
@@ -40,8 +42,8 @@ router.get("/", async (req: AuthRequest, res) => {
   } catch (err) { req.log.error({ err }, "GetQuotes error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-// POST /api/quotes — no stock reduction
-router.post("/", async (req: AuthRequest, res) => {
+// POST /api/quotes — compras + admin
+router.post("/", canWrite, async (req: AuthRequest, res) => {
   const parsed = CreateQuoteBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
   const { customerId, items, paymentMethod, notes, validUntil } = parsed.data;
@@ -115,8 +117,8 @@ router.get("/:id", async (req, res) => {
   } catch (err) { req.log.error({ err }, "GetQuoteById error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-// POST /api/quotes/:id/convert — convert to sale, reduce stock
-router.post("/:id/convert", async (req: AuthRequest, res) => {
+// POST /api/quotes/:id/convert — compras + admin
+router.post("/:id/convert", canWrite, async (req: AuthRequest, res) => {
   const id = Number(req.params.id);
   try {
     const [quote] = await db.select().from(quotesTable).where(eq(quotesTable.id, id)).limit(1);
@@ -130,7 +132,6 @@ router.post("/:id/convert", async (req: AuthRequest, res) => {
       : [];
     const productMap = new Map(products.map(p => [p.id, p]));
 
-    // Validate stock
     for (const d of details) {
       if (!d.productId) continue;
       const p = productMap.get(d.productId);

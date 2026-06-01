@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const brandSchema = z.object({
   name: z.string().min(2, "Requerido"),
@@ -21,6 +22,7 @@ const brandSchema = z.object({
 export default function Brands() {
   const [search, setSearch] = useState("");
   const { data: brands, isLoading } = useGetBrands();
+  const { can } = usePermissions();
   
   const createMutation = useCreateBrand();
   const updateMutation = useUpdateBrand();
@@ -79,7 +81,28 @@ export default function Brands() {
     });
   };
 
+  const canCreate = can("brands", "create");
+  const canUpdate = can("brands", "update");
+  const canDelete = can("brands", "delete");
+
   const filteredBrands = brands?.filter(b => b.name.toLowerCase().includes(search.toLowerCase()));
+
+  const FormContent = () => (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField control={form.control} name="name" render={({ field }) => (
+          <FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="description" render={({ field }) => (
+          <FormItem><FormLabel>Descripción</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <div className="flex justify-end gap-2 mt-4">
+          <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>Guardar</Button>
+        </div>
+      </form>
+    </Form>
+  );
 
   return (
     <div className="space-y-4">
@@ -90,50 +113,63 @@ export default function Brands() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
           </div>
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={handleOpenCreate}><Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nueva</span></Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>{editingId ? "Editar Marca" : "Nueva Marca"}</DialogTitle></DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField control={form.control} name="name" render={({ field }) => (
-                    <FormItem><FormLabel>Nombre</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="description" render={({ field }) => (
-                    <FormItem><FormLabel>Descripción</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <div className="flex justify-end gap-2 mt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                    <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>Guardar</Button>
-                  </div>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+          {canCreate && (
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={handleOpenCreate}><Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nueva</span></Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>{editingId ? "Editar Marca" : "Nueva Marca"}</DialogTitle></DialogHeader>
+                <FormContent />
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
-            <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Descripción</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Descripción</TableHead>
+                {(canUpdate || canDelete) && <TableHead className="text-right">Acciones</TableHead>}
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {isLoading ? <TableRow><TableCell colSpan={3} className="text-center py-4">Cargando...</TableCell></TableRow> : filteredBrands?.map((b) => (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={canUpdate || canDelete ? 3 : 2} className="text-center py-4">Cargando...</TableCell></TableRow>
+              ) : filteredBrands?.map((b) => (
                 <TableRow key={b.id}>
                   <TableCell className="font-medium">{b.name}</TableCell>
                   <TableCell>{b.description || "-"}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(b)}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(b.id)}><Trash2 className="h-4 w-4" /></Button>
-                  </TableCell>
+                  {(canUpdate || canDelete) && (
+                    <TableCell className="text-right space-x-2">
+                      {canUpdate && (
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(b)}><Pencil className="h-4 w-4" /></Button>
+                      )}
+                      {canDelete && (
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(b.id)}><Trash2 className="h-4 w-4" /></Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit dialog for when canCreate is false but canUpdate is true */}
+      {canUpdate && !canCreate && (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Editar Marca</DialogTitle></DialogHeader>
+            <FormContent />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const schema = z.object({
   name: z.string().min(2, "Requerido"),
@@ -25,6 +26,7 @@ const schema = z.object({
 export default function Suppliers() {
   const [search, setSearch] = useState("");
   const { data: suppliers, isLoading } = useGetSuppliers();
+  const { can } = usePermissions();
   
   const createMutation = useCreateSupplier();
   const updateMutation = useUpdateSupplier();
@@ -97,9 +99,42 @@ export default function Suppliers() {
     });
   };
 
+  const canCreate = can("suppliers", "create");
+  const canUpdate = can("suppliers", "update");
+  const canDelete = can("suppliers", "delete");
+
   const filteredSuppliers = suppliers?.filter(s => 
     s.name.toLowerCase().includes(search.toLowerCase()) || 
     (s.contactName && s.contactName.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const FormContent = () => (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormField control={form.control} name="name" render={({ field }) => (
+          <FormItem className="md:col-span-2"><FormLabel>Empresa</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="nitCi" render={({ field }) => (
+          <FormItem><FormLabel>NIT/CI</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="contactName" render={({ field }) => (
+          <FormItem><FormLabel>Contacto</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="email" render={({ field }) => (
+          <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="phone" render={({ field }) => (
+          <FormItem><FormLabel>Teléfono</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="address" render={({ field }) => (
+          <FormItem className="md:col-span-2"><FormLabel>Dirección</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <div className="md:col-span-2 flex justify-end gap-2 mt-4">
+          <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>Guardar</Button>
+        </div>
+      </form>
+    </Form>
   );
 
   return (
@@ -111,65 +146,69 @@ export default function Suppliers() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
           </div>
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={handleOpenCreate}><Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nuevo</span></Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader><DialogTitle>{editingId ? "Editar Proveedor" : "Nuevo Proveedor"}</DialogTitle></DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField control={form.control} name="name" render={({ field }) => (
-                    <FormItem className="md:col-span-2"><FormLabel>Empresa</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="nitCi" render={({ field }) => (
-                    <FormItem><FormLabel>NIT/CI</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="contactName" render={({ field }) => (
-                    <FormItem><FormLabel>Contacto</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="email" render={({ field }) => (
-                    <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="phone" render={({ field }) => (
-                    <FormItem><FormLabel>Teléfono</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="address" render={({ field }) => (
-                    <FormItem className="md:col-span-2"><FormLabel>Dirección</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <div className="md:col-span-2 flex justify-end gap-2 mt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                    <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>Guardar</Button>
-                  </div>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+          {canCreate && (
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={handleOpenCreate}><Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nuevo</span></Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader><DialogTitle>{editingId ? "Editar Proveedor" : "Nuevo Proveedor"}</DialogTitle></DialogHeader>
+                <FormContent />
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
-            <TableHeader><TableRow><TableHead>Empresa</TableHead><TableHead>NIT/CI</TableHead><TableHead>Contacto</TableHead><TableHead>Email</TableHead><TableHead>Teléfono</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empresa</TableHead>
+                <TableHead>NIT/CI</TableHead>
+                <TableHead>Contacto</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Teléfono</TableHead>
+                {(canUpdate || canDelete) && <TableHead className="text-right">Acciones</TableHead>}
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {isLoading ? <TableRow><TableCell colSpan={6} className="text-center py-4">Cargando...</TableCell></TableRow> : filteredSuppliers?.map((s) => (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={canUpdate || canDelete ? 6 : 5} className="text-center py-4">Cargando...</TableCell></TableRow>
+              ) : filteredSuppliers?.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell>{s.nitCi || "-"}</TableCell>
                   <TableCell>{s.contactName || "-"}</TableCell>
                   <TableCell>{s.email || "-"}</TableCell>
                   <TableCell>{s.phone || "-"}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(s)}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(s.id)}><Trash2 className="h-4 w-4" /></Button>
-                  </TableCell>
+                  {(canUpdate || canDelete) && (
+                    <TableCell className="text-right space-x-2">
+                      {canUpdate && (
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(s)}><Pencil className="h-4 w-4" /></Button>
+                      )}
+                      {canDelete && (
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit dialog for when canCreate is false but canUpdate is true */}
+      {canUpdate && !canCreate && (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>Editar Proveedor</DialogTitle></DialogHeader>
+            <FormContent />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

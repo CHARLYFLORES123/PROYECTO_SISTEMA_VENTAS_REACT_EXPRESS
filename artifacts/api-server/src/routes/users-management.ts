@@ -3,10 +3,11 @@ import bcrypt from "bcryptjs";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { CreateUserBody, UpdateUserBody } from "@workspace/api-zod";
-import { verifyToken } from "../middlewares/auth";
+import { verifyToken, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
+router.use(requireAdmin);
 
 function fmt(u: any) {
   return { id: u.id, name: u.name, email: u.email, role: u.role, createdAt: u.createdAt instanceof Date ? u.createdAt.toISOString() : u.createdAt };

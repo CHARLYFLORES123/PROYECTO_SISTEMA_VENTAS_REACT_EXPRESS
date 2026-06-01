@@ -13,6 +13,7 @@ import * as z from "zod";
 import { Toast, confirmDelete } from "@/lib/swal";
 import { Pencil, Trash2, Plus, Search, FileBarChart2 } from "lucide-react";
 import { useLocation } from "wouter";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const customerSchema = z.object({
   name: z.string().min(2, "Requerido"),
@@ -26,6 +27,7 @@ export default function Customers() {
   const [search, setSearch] = useState("");
   const [, navigate] = useLocation();
   const { data: customers, isLoading } = useGetCustomers({ search: search || undefined });
+  const { can } = usePermissions();
   
   const createMutation = useCreateCustomer();
   const updateMutation = useUpdateCustomer();
@@ -97,6 +99,36 @@ export default function Customers() {
     });
   };
 
+  const canCreate = can("customers", "create");
+  const canUpdate = can("customers", "update");
+  const canDelete = can("customers", "delete");
+
+  const FormContent = () => (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField control={form.control} name="name" render={({ field }) => (
+          <FormItem><FormLabel>Nombre o Razón Social</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="nitCi" render={({ field }) => (
+          <FormItem><FormLabel>NIT / CI</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="email" render={({ field }) => (
+          <FormItem><FormLabel>Correo Electrónico</FormLabel><FormControl><Input type="email" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="phone" render={({ field }) => (
+          <FormItem><FormLabel>Teléfono</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <FormField control={form.control} name="address" render={({ field }) => (
+          <FormItem><FormLabel>Dirección</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+        )} />
+        <div className="flex justify-end gap-2 mt-4">
+          <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>Guardar</Button>
+        </div>
+      </form>
+    </Form>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -111,41 +143,21 @@ export default function Customers() {
               className="pl-8"
             />
           </div>
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={handleOpenCreate}>
-                <Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nuevo</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingId ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField control={form.control} name="name" render={({ field }) => (
-                    <FormItem><FormLabel>Nombre o Razón Social</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="nitCi" render={({ field }) => (
-                    <FormItem><FormLabel>NIT / CI</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="email" render={({ field }) => (
-                    <FormItem><FormLabel>Correo Electrónico</FormLabel><FormControl><Input type="email" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="phone" render={({ field }) => (
-                    <FormItem><FormLabel>Teléfono</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="address" render={({ field }) => (
-                    <FormItem><FormLabel>Dirección</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <div className="flex justify-end gap-2 mt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                    <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>Guardar</Button>
-                  </div>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+          {canCreate && (
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={handleOpenCreate}>
+                  <Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Nuevo</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingId ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
+                </DialogHeader>
+                <FormContent />
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
@@ -183,12 +195,16 @@ export default function Customers() {
                       <FileBarChart2 className="h-3.5 w-3.5" />
                       Extracto
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(c)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(c.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {canUpdate && (
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(c)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(c.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -203,6 +219,18 @@ export default function Customers() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit dialog for when canCreate is false but canUpdate is true */}
+      {canUpdate && !canCreate && (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Cliente</DialogTitle>
+            </DialogHeader>
+            <FormContent />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

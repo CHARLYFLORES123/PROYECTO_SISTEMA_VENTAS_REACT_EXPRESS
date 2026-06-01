@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, customersTable, salesTable, saleDetailsTable } from "@workspace/db";
 import { eq, ilike, count, sum, min, max, avg } from "drizzle-orm";
 import { CreateCustomerBody, GetCustomersQueryParams } from "@workspace/api-zod";
-import { verifyToken } from "../middlewares/auth";
+import { verifyToken, requireRoles, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
+
+const canWrite = requireRoles(["admin", "vendedor"]);
 
 function formatCustomer(c: any, totalPurchases = 0) {
   return {
@@ -50,8 +52,8 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/customers
-router.post("/", async (req, res) => {
+// POST /api/customers — vendedor + admin
+router.post("/", canWrite, async (req, res) => {
   const parsed = CreateCustomerBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
 
@@ -78,8 +80,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// PUT /api/customers/:id
-router.put("/:id", async (req, res) => {
+// PUT /api/customers/:id — vendedor + admin
+router.put("/:id", canWrite, async (req, res) => {
   const id = Number(req.params.id);
   const parsed = CreateCustomerBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
@@ -151,8 +153,8 @@ router.get("/:id/statement", async (req, res) => {
   }
 });
 
-// DELETE /api/customers/:id
-router.delete("/:id", async (req, res) => {
+// DELETE /api/customers/:id — admin only
+router.delete("/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   try {
     await db.delete(customersTable).where(eq(customersTable.id, id));

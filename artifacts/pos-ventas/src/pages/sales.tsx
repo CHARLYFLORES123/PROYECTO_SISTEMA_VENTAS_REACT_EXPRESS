@@ -11,6 +11,7 @@ import { Eye, MoreHorizontal, XCircle, Filter, Download, Plus, Search } from "lu
 import { Toast, Swal } from "@/lib/swal";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
+import { usePermissions } from "@/hooks/use-permissions";
 import * as XLSX from "xlsx";
 
 export default function Sales() {
@@ -20,6 +21,7 @@ export default function Sales() {
   const [showFilters, setShowFilters] = useState(false);
   const queryClient = useQueryClient();
   const { currencySymbol } = useCurrency();
+  const { can } = usePermissions();
 
   const { data: sales, isLoading } = useGetSales({
     dateFrom: dateFrom || undefined,
@@ -28,6 +30,8 @@ export default function Sales() {
   });
   const { data: customers } = useGetCustomers();
   const cancelSale = useCancelSale();
+
+  const canCancel = can("sales", "cancel");
 
   const handleCancel = async (id: number) => {
     const result = await Swal.fire({
@@ -229,7 +233,7 @@ export default function Sales() {
                               <Eye className="w-4 h-4 mr-2" /> Ver detalle
                             </Link>
                           </DropdownMenuItem>
-                          {sale.status === "completada" && (
+                          {canCancel && sale.status === "completada" && (
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={() => handleCancel(sale.id)}

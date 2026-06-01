@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, suppliersTable } from "@workspace/db";
 import { eq, ilike } from "drizzle-orm";
 import { CreateSupplierBody, GetCustomersQueryParams } from "@workspace/api-zod";
-import { verifyToken } from "../middlewares/auth";
+import { verifyToken, requireRoles, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
+
+const canWrite = requireRoles(["admin", "compras"]);
 
 function fmt(s: any) {
   return {
@@ -25,7 +27,8 @@ router.get("/", async (req, res) => {
   } catch (err) { req.log.error({ err }, "GetSuppliers error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-router.post("/", async (req, res) => {
+// POST — compras + admin
+router.post("/", canWrite, async (req, res) => {
   const parsed = CreateSupplierBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
   try {
@@ -34,7 +37,8 @@ router.post("/", async (req, res) => {
   } catch (err) { req.log.error({ err }, "CreateSupplier error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-router.put("/:id", async (req, res) => {
+// PUT — compras + admin
+router.put("/:id", canWrite, async (req, res) => {
   const id = Number(req.params.id);
   const parsed = CreateSupplierBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
@@ -45,7 +49,8 @@ router.put("/:id", async (req, res) => {
   } catch (err) { req.log.error({ err }, "UpdateSupplier error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-router.delete("/:id", async (req, res) => {
+// DELETE — admin only
+router.delete("/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   try {
     await db.delete(suppliersTable).where(eq(suppliersTable.id, id));

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, businessSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { UpdateBusinessSettingsBody } from "@workspace/api-zod";
-import { verifyToken } from "../middlewares/auth";
+import { verifyToken, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 router.use(verifyToken);
@@ -26,6 +26,7 @@ async function ensureSettings() {
   return created;
 }
 
+// GET — all authenticated roles
 router.get("/", async (req, res) => {
   try {
     const settings = await ensureSettings();
@@ -33,7 +34,8 @@ router.get("/", async (req, res) => {
   } catch (err) { req.log.error({ err }, "GetBusinessSettings error"); res.status(500).json({ message: "Error interno" }); }
 });
 
-router.put("/", async (req, res) => {
+// PUT — admin only
+router.put("/", requireAdmin, async (req, res) => {
   const parsed = UpdateBusinessSettingsBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
   try {
