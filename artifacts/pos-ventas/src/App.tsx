@@ -27,6 +27,7 @@ import CierreCaja from "@/pages/cierre-caja";
 import CustomerStatement from "@/pages/customer-statement";
 import Loyalty from "@/pages/loyalty";
 import LoyaltySummary from "@/pages/loyalty-summary";
+import Audit from "@/pages/audit";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +55,7 @@ function AuthenticatedRoutes() {
         <Route path="/customers/:id/statement" component={CustomerStatement} />
         <Route path="/loyalty" component={Loyalty} />
         <Route path="/loyalty/:id/summary" component={LoyaltySummary} />
+        <Route path="/audit" component={Audit} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

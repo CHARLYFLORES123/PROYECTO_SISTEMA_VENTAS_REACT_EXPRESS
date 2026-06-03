@@ -15,6 +15,7 @@ import usersManagementRouter from "./users-management";
 import reportsRouter from "./reports";
 import loyaltyRouter from "./loyalty";
 import couponsRouter from "./coupons";
+import auditLogsRouter from "./audit-logs";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use("/users", usersManagementRouter);
 router.use("/reports", reportsRouter);
 router.use("/loyalty", loyaltyRouter);
 router.use("/coupons", couponsRouter);
+router.use("/audit-logs", auditLogsRouter);
 
 export default router;

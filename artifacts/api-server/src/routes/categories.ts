@@ -2,7 +2,8 @@ import { Router } from "express";
 import { db, categoriesTable, productsTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
 import { CreateCategoryBody } from "@workspace/api-zod";
-import { verifyToken, requireRoles, requireAdmin } from "../middlewares/auth";
+import { verifyToken, requireRoles, requireAdmin, AuthRequest } from "../middlewares/auth";
+import { auditLog } from "../lib/audit";
 
 const router = Router();
 router.use(verifyToken);
@@ -33,13 +34,14 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/categories — inventario + admin
-router.post("/", canWrite, async (req, res) => {
+router.post("/", canWrite, async (req: AuthRequest, res) => {
   const parsed = CreateCategoryBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
 
   try {
     const [cat] = await db.insert(categoriesTable).values(parsed.data).returning();
     res.status(201).json({ ...cat, productCount: 0, createdAt: cat.createdAt.toISOString() });
+    auditLog({ req, action: "created", entity: "category", entityId: cat.id, entityName: cat.name });
   } catch (err) {
     req.log.error({ err }, "CreateCategory error");
     res.status(500).json({ message: "Error interno" });
@@ -60,7 +62,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // PUT /api/categories/:id — inventario + admin
-router.put("/:id", canWrite, async (req, res) => {
+router.put("/:id", canWrite, async (req: AuthRequest, res) => {
   const id = Number(req.params.id);
   const parsed = CreateCategoryBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
@@ -69,6 +71,7 @@ router.put("/:id", canWrite, async (req, res) => {
     const [cat] = await db.update(categoriesTable).set(parsed.data).where(eq(categoriesTable.id, id)).returning();
     if (!cat) { res.status(404).json({ message: "Categoría no encontrada" }); return; }
     res.json({ ...cat, productCount: 0, createdAt: cat.createdAt.toISOString() });
+    auditLog({ req, action: "updated", entity: "category", entityId: cat.id, entityName: cat.name });
   } catch (err) {
     req.log.error({ err }, "UpdateCategory error");
     res.status(500).json({ message: "Error interno" });
@@ -76,11 +79,13 @@ router.put("/:id", canWrite, async (req, res) => {
 });
 
 // DELETE /api/categories/:id — admin only
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", requireAdmin, async (req: AuthRequest, res) => {
   const id = Number(req.params.id);
   try {
+    const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, id)).limit(1);
     await db.delete(categoriesTable).where(eq(categoriesTable.id, id));
     res.json({ message: "Categoría eliminada" });
+    auditLog({ req, action: "deleted", entity: "category", entityId: id, entityName: cat?.name });
   } catch (err) {
     req.log.error({ err }, "DeleteCategory error");
     res.status(500).json({ message: "Error interno" });

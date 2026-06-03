@@ -2,7 +2,8 @@ import { Router } from "express";
 import { db, suppliersTable } from "@workspace/db";
 import { eq, ilike } from "drizzle-orm";
 import { CreateSupplierBody, GetCustomersQueryParams } from "@workspace/api-zod";
-import { verifyToken, requireRoles, requireAdmin } from "../middlewares/auth";
+import { verifyToken, requireRoles, requireAdmin, AuthRequest } from "../middlewares/auth";
+import { auditLog } from "../lib/audit";
 
 const router = Router();
 router.use(verifyToken);
@@ -28,17 +29,18 @@ router.get("/", async (req, res) => {
 });
 
 // POST — compras + admin
-router.post("/", canWrite, async (req, res) => {
+router.post("/", canWrite, async (req: AuthRequest, res) => {
   const parsed = CreateSupplierBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
   try {
     const [s] = await db.insert(suppliersTable).values(parsed.data).returning();
     res.status(201).json(fmt(s));
+    auditLog({ req, action: "created", entity: "supplier", entityId: s.id, entityName: s.name });
   } catch (err) { req.log.error({ err }, "CreateSupplier error"); res.status(500).json({ message: "Error interno" }); }
 });
 
 // PUT — compras + admin
-router.put("/:id", canWrite, async (req, res) => {
+router.put("/:id", canWrite, async (req: AuthRequest, res) => {
   const id = Number(req.params.id);
   const parsed = CreateSupplierBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
@@ -46,15 +48,18 @@ router.put("/:id", canWrite, async (req, res) => {
     const [s] = await db.update(suppliersTable).set(parsed.data).where(eq(suppliersTable.id, id)).returning();
     if (!s) { res.status(404).json({ message: "Proveedor no encontrado" }); return; }
     res.json(fmt(s));
+    auditLog({ req, action: "updated", entity: "supplier", entityId: s.id, entityName: s.name });
   } catch (err) { req.log.error({ err }, "UpdateSupplier error"); res.status(500).json({ message: "Error interno" }); }
 });
 
 // DELETE — admin only
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", requireAdmin, async (req: AuthRequest, res) => {
   const id = Number(req.params.id);
   try {
+    const [s] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, id)).limit(1);
     await db.delete(suppliersTable).where(eq(suppliersTable.id, id));
     res.json({ message: "Proveedor eliminado" });
+    auditLog({ req, action: "deleted", entity: "supplier", entityId: id, entityName: s?.name });
   } catch (err) { req.log.error({ err }, "DeleteSupplier error"); res.status(500).json({ message: "Error interno" }); }
 });
 

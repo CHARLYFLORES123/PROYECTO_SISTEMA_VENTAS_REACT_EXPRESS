@@ -3,6 +3,7 @@ import { db, quotesTable, quoteDetailsTable, productsTable, customersTable, sale
 import { eq, and, sql } from "drizzle-orm";
 import { CreateQuoteBody, GetSalesQueryParams } from "@workspace/api-zod";
 import { verifyToken, requireRoles, AuthRequest } from "../middlewares/auth";
+import { auditLog } from "../lib/audit";
 
 const router = Router();
 router.use(verifyToken);
@@ -61,24 +62,17 @@ router.post("/", canWrite, async (req: AuthRequest, res) => {
 
     const result = await db.transaction(async (tx) => {
       const [quote] = await tx.insert(quotesTable).values({
-        customerId: customerId ?? null,
-        userId: req.userId ?? null,
-        subtotal: String(subtotal.toFixed(2)),
-        iva: String(iva.toFixed(2)),
-        total: String(total.toFixed(2)),
-        paymentMethod,
-        notes: notes ?? null,
-        validUntil: validUntil ? new Date(validUntil) : null,
+        customerId: customerId ?? null, userId: req.userId ?? null,
+        subtotal: String(subtotal.toFixed(2)), iva: String(iva.toFixed(2)), total: String(total.toFixed(2)),
+        paymentMethod, notes: notes ?? null, validUntil: validUntil ? new Date(validUntil) : null,
       }).returning();
 
       for (const item of items) {
         const p = productMap.get(item.productId);
         await tx.insert(quoteDetailsTable).values({
-          quoteId: quote.id,
-          productId: item.productId,
+          quoteId: quote.id, productId: item.productId,
           productName: p?.name ?? "Producto desconocido",
-          quantity: item.quantity,
-          unitPrice: String(item.unitPrice.toFixed(2)),
+          quantity: item.quantity, unitPrice: String(item.unitPrice.toFixed(2)),
           subtotal: String((item.unitPrice * item.quantity).toFixed(2)),
         });
       }
@@ -92,6 +86,7 @@ router.post("/", canWrite, async (req: AuthRequest, res) => {
     }
 
     res.status(201).json(fmtQuote(result, customerName));
+    auditLog({ req, action: "created", entity: "quote", entityId: result.id, entityName: customerName ?? `Cotización #${result.id}`, details: { total } });
   } catch (err) { req.log.error({ err }, "CreateQuote error"); res.status(500).json({ message: "Error interno" }); }
 });
 
@@ -143,23 +138,15 @@ router.post("/:id/convert", canWrite, async (req: AuthRequest, res) => {
 
     const sale = await db.transaction(async (tx) => {
       const [newSale] = await tx.insert(salesTable).values({
-        customerId: quote.customerId,
-        userId: req.userId ?? null,
-        subtotal: quote.subtotal,
-        iva: quote.iva,
-        total: quote.total,
-        paymentMethod: quote.paymentMethod,
-        notes: quote.notes,
+        customerId: quote.customerId, userId: req.userId ?? null,
+        subtotal: quote.subtotal, iva: quote.iva, total: quote.total,
+        paymentMethod: quote.paymentMethod, notes: quote.notes,
       }).returning();
 
       for (const d of details) {
         await tx.insert(saleDetailsTable).values({
-          saleId: newSale.id,
-          productId: d.productId,
-          productName: d.productName,
-          quantity: d.quantity,
-          unitPrice: d.unitPrice,
-          subtotal: d.subtotal,
+          saleId: newSale.id, productId: d.productId, productName: d.productName,
+          quantity: d.quantity, unitPrice: d.unitPrice, subtotal: d.subtotal,
         });
         if (d.productId) {
           const p = productMap.get(d.productId);
@@ -185,6 +172,7 @@ router.post("/:id/convert", canWrite, async (req: AuthRequest, res) => {
       paymentMethod: sale.paymentMethod, status: sale.status,
       notes: sale.notes ?? null, createdAt: sale.createdAt.toISOString(),
     });
+    auditLog({ req, action: "converted", entity: "quote", entityId: id, entityName: `Cotización #${id} → Venta #${sale.id}`, details: { saleId: sale.id, total: Number(sale.total) } });
   } catch (err) { req.log.error({ err }, "ConvertQuoteToSale error"); res.status(500).json({ message: "Error interno" }); }
 });
 

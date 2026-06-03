@@ -23,6 +23,7 @@ import {
   Building2,
   LockKeyhole,
   Star,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/currency-context";
@@ -99,10 +100,11 @@ const ADMIN_GROUP = {
     { href: "/users",           label: "Usuarios",          icon: UserCog  },
     { href: "/payment-methods", label: "Métodos de Pago",   icon: CreditCard },
     { href: "/settings",        label: "Configuración",     icon: Settings },
+    { href: "/audit",           label: "Auditoría",         icon: Shield },
   ],
 };
 
-const ALL_NAV_ITEMS = [
+const ALL_NAV_ITEMS: { href: string; label: string; icon: React.ElementType }[] = [
   ...ALL_NAV_GROUPS.flatMap(g => g.items),
   ...ADMIN_GROUP.items,
 ];

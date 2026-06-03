@@ -4,6 +4,7 @@ import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { CreateSaleBody } from "@workspace/api-zod";
 import { verifyToken, requireRoles, requireAdmin, AuthRequest } from "../middlewares/auth";
 import { awardPointsForSale } from "./loyalty";
+import { auditLog } from "../lib/audit";
 
 const router = Router();
 router.use(verifyToken);
@@ -14,17 +15,10 @@ const IVA_RATE = 0.13;
 
 function formatSale(s: any, customerName?: string | null, userName?: string | null) {
   return {
-    id: s.id,
-    customerId: s.customerId ?? null,
-    customerName: customerName ?? null,
-    userId: s.userId ?? null,
-    userName: userName ?? null,
-    subtotal: Number(s.subtotal),
-    iva: Number(s.iva),
-    total: Number(s.total),
-    paymentMethod: s.paymentMethod,
-    status: s.status,
-    notes: s.notes ?? null,
+    id: s.id, customerId: s.customerId ?? null, customerName: customerName ?? null,
+    userId: s.userId ?? null, userName: userName ?? null,
+    subtotal: Number(s.subtotal), iva: Number(s.iva), total: Number(s.total),
+    paymentMethod: s.paymentMethod, status: s.status, notes: s.notes ?? null,
     createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
   };
 }
@@ -34,11 +28,7 @@ router.get("/", async (req: AuthRequest, res) => {
   const { dateFrom, dateTo, customerId, userId } = req.query as any;
   try {
     const rows = await db
-      .select({
-        sale: salesTable,
-        customerName: customersTable.name,
-        userName: usersTable.name,
-      })
+      .select({ sale: salesTable, customerName: customersTable.name, userName: usersTable.name })
       .from(salesTable)
       .leftJoin(customersTable, eq(salesTable.customerId, customersTable.id))
       .leftJoin(usersTable, eq(salesTable.userId, usersTable.id))
@@ -100,11 +90,8 @@ router.post("/", canCreate, async (req: AuthRequest, res) => {
       for (const item of items) {
         const p = productMap.get(item.productId)!;
         await tx.insert(saleDetailsTable).values({
-          saleId: sale.id,
-          productId: item.productId,
-          productName: p.name,
-          quantity: item.quantity,
-          unitPrice: String(item.unitPrice.toFixed(2)),
+          saleId: sale.id, productId: item.productId, productName: p.name,
+          quantity: item.quantity, unitPrice: String(item.unitPrice.toFixed(2)),
           subtotal: String((item.unitPrice * item.quantity).toFixed(2)),
         });
         await tx.update(productsTable)
@@ -120,7 +107,6 @@ router.post("/", canCreate, async (req: AuthRequest, res) => {
       customerName = c?.name ?? null;
     }
 
-    // Award loyalty points if enabled
     try {
       const [settings] = await db.select().from(businessSettingsTable).limit(1);
       if (settings?.loyaltyEnabled && customerId) {
@@ -130,13 +116,12 @@ router.post("/", canCreate, async (req: AuthRequest, res) => {
       req.log.warn({ err: pointsErr }, "Failed to award loyalty points (non-fatal)");
     }
 
-    const pointsEarned = (() => {
-      try {
-        return 0;
-      } catch { return 0; }
-    })();
-
-    res.status(201).json({ ...formatSale(result, customerName), pointsEarned });
+    res.status(201).json({ ...formatSale(result, customerName), pointsEarned: 0 });
+    auditLog({
+      req, action: "created", entity: "sale", entityId: result.id,
+      entityName: customerName ?? `Venta #${result.id}`,
+      details: { total: Number(result.total), paymentMethod, items: items.length },
+    });
   } catch (err) {
     req.log.error({ err }, "CreateSale error");
     res.status(500).json({ message: "Error interno" });
@@ -172,7 +157,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST /api/sales/:id/cancel — admin only
-router.post("/:id/cancel", requireAdmin, async (req, res) => {
+router.post("/:id/cancel", requireAdmin, async (req: AuthRequest, res) => {
   const id = Number(req.params.id);
   try {
     const [sale] = await db.select().from(salesTable).where(eq(salesTable.id, id)).limit(1);
@@ -193,6 +178,7 @@ router.post("/:id/cancel", requireAdmin, async (req, res) => {
     });
 
     res.json({ message: "Venta cancelada y stock restaurado" });
+    auditLog({ req, action: "cancelled", entity: "sale", entityId: id, entityName: `Venta #${id}`, details: { total: Number(sale.total) } });
   } catch (err) {
     req.log.error({ err }, "CancelSale error");
     res.status(500).json({ message: "Error interno" });

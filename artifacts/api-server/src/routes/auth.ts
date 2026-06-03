@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { LoginBody, RegisterBody } from "@workspace/api-zod";
 import { verifyToken, signToken, AuthRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
+import { auditLog } from "../lib/audit";
 
 const router = Router();
 
@@ -30,7 +31,7 @@ router.post("/login", async (req, res) => {
       return;
     }
 
-    const token = signToken(user.id, user.role);
+    const token = signToken(user.id, user.role, user.name);
     res.json({
       token,
       user: {
@@ -41,6 +42,13 @@ router.post("/login", async (req, res) => {
         createdAt: user.createdAt.toISOString(),
       },
     });
+
+    const forwarded = req.headers["x-forwarded-for"] as string | undefined;
+    const ip = forwarded?.split(",")[0]?.trim() ?? req.socket?.remoteAddress ?? null;
+    db.insert((await import("@workspace/db")).auditLogsTable).values({
+      userId: user.id, userName: user.name, userRole: user.role,
+      action: "login", entity: "user", entityId: user.id, entityName: user.email, ip,
+    }).catch(e => logger.warn({ err: e }, "Audit login failed"));
   } catch (err) {
     req.log.error({ err }, "Login error");
     res.status(500).json({ message: "Error interno" });
@@ -66,7 +74,7 @@ router.post("/register", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db.insert(usersTable).values({ name, email, passwordHash }).returning();
 
-    const token = signToken(user.id, user.role);
+    const token = signToken(user.id, user.role, user.name);
     res.status(201).json({
       token,
       user: {
