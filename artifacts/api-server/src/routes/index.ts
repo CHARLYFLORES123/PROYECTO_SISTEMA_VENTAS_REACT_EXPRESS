@@ -16,6 +16,7 @@ import reportsRouter from "./reports";
 import loyaltyRouter from "./loyalty";
 import couponsRouter from "./coupons";
 import auditLogsRouter from "./audit-logs";
+import backupRouter from "./backup";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use("/reports", reportsRouter);
 router.use("/loyalty", loyaltyRouter);
 router.use("/coupons", couponsRouter);
 router.use("/audit-logs", auditLogsRouter);
+router.use("/backup", backupRouter);
 
 export default router;

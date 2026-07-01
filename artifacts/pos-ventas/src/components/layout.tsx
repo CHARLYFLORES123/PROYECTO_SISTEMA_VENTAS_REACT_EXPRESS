@@ -24,13 +24,15 @@ import {
   LockKeyhole,
   Star,
   Shield,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/contexts/currency-context";
+import { NotificationBell } from "@/components/notification-bell";
 
 // ── Role definitions ──────────────────────────────────────────────────────────
 
-export const ROLE_DEFAULT_ROUTE: Record<string, string> = {
+const ROLE_DEFAULT_ROUTE: Record<string, string> = {
   admin:      "/dashboard",
   vendedor:   "/pos",
   inventario: "/products",
@@ -116,7 +118,29 @@ export function Layout({ children }: { children: ReactNode }) {
   const { data: user, isError } = useGetMe({ query: { retry: false } as any });
   const { data: settings } = useGetBusinessSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
   const { currencySymbol } = useCurrency();
+
+  const handleBackup = async () => {
+    setBackupLoading(true);
+    try {
+      const res = await fetch("/api/backup", { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (!res.ok) throw new Error("Error al generar backup");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `backup-pos-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Error al generar el backup");
+    } finally {
+      setBackupLoading(false);
+    }
+  };
 
   useEffect(() => {
     const handleUnauthorized = () => setLocation("/");
@@ -241,6 +265,11 @@ export function Layout({ children }: { children: ReactNode }) {
             <p className="text-sm font-semibold text-sidebar-foreground truncate">{user.name}</p>
             <p className="text-xs text-muted-foreground truncate capitalize">{user.role}</p>
           </div>
+          {userRole === "admin" && (
+            <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-primary shrink-0" onClick={handleBackup} disabled={backupLoading} title="Descargar Backup">
+              <Download className={`w-3.5 h-3.5 ${backupLoading ? "animate-bounce" : ""}`} />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive shrink-0" onClick={handleLogout} title="Cerrar Sesión">
             <LogOut className="w-3.5 h-3.5" />
           </Button>
@@ -275,6 +304,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <span>{currencySymbol}</span>
               <span className="text-primary/70">{settings?.currency || "BOB"}</span>
             </div>
+            {userRole === "admin" && <NotificationBell />}
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
                 <span className="text-xs font-bold text-white">{user.name.charAt(0).toUpperCase()}</span>
