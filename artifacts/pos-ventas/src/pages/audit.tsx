@@ -3,14 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useGetUsers } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Search, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, RefreshCw, ChevronLeft, ChevronRight, FileDown } from "lucide-react";
 import { getToken } from "@/lib/auth";
+import * as XLSX from "xlsx";
 
 const PAGE_SIZE = 50;
 
@@ -80,6 +80,7 @@ export default function Audit() {
   const [action, setAction]     = useState("all");
   const [entity, setEntity]     = useState("all");
   const [offset, setOffset]     = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const [appliedFilters, setAppliedFilters] = useState<Record<string, string | number>>({ limit: PAGE_SIZE, offset: 0 });
 
@@ -108,6 +109,37 @@ export default function Audit() {
     setAppliedFilters(f);
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const allData = await fetchAuditLogs({ ...appliedFilters, limit: 10000, offset: 0 });
+      const rows = allData.data.map(log => ({
+        "Fecha y Hora": format(new Date(log.createdAt), "dd/MM/yyyy HH:mm:ss", { locale: es }),
+        "Usuario":       log.userName ?? `#${log.userId}`,
+        "Rol":           ROLE_LABELS[log.userRole ?? ""] ?? log.userRole ?? "",
+        "Acción":        log.actionLabel,
+        "Módulo":        log.entityLabel,
+        "Elemento":      log.entityName ?? (log.entityId ? `#${log.entityId}` : ""),
+        "IP":            log.ip ?? "",
+        "Detalles":      log.details ? JSON.stringify(log.details) : "",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [
+        { wch: 20 }, { wch: 22 }, { wch: 12 }, { wch: 14 },
+        { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 40 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Auditoría");
+      const filename = `auditoria-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, filename);
+    } catch {
+      alert("Error al exportar");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
@@ -119,10 +151,16 @@ export default function Audit() {
           <h2 className="text-2xl font-bold tracking-tight">Registro de Auditoría</h2>
           <p className="text-sm text-muted-foreground">Historial completo de acciones realizadas en el sistema</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
-          Actualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting || isLoading}>
+            <FileDown className={`h-4 w-4 mr-2 ${exporting ? "animate-bounce" : ""}`} />
+            {exporting ? "Exportando..." : "Exportar Excel"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
