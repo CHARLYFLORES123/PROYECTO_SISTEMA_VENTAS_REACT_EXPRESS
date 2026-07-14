@@ -76,9 +76,9 @@ async function fetchAuditLogs(params: Record<string, string | number>) {
 export default function Audit() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo]     = useState("");
-  const [userId, setUserId]     = useState("");
-  const [action, setAction]     = useState("");
-  const [entity, setEntity]     = useState("");
+  const [userId, setUserId]     = useState("all");
+  const [action, setAction]     = useState("all");
+  const [entity, setEntity]     = useState("all");
   const [offset, setOffset]     = useState(0);
 
   const [appliedFilters, setAppliedFilters] = useState<Record<string, string | number>>({ limit: PAGE_SIZE, offset: 0 });
@@ -93,11 +93,11 @@ export default function Audit() {
 
   const applyFilters = useCallback(() => {
     const f: Record<string, string | number> = { limit: PAGE_SIZE, offset: 0 };
-    if (dateFrom) f.dateFrom = dateFrom;
-    if (dateTo)   f.dateTo   = dateTo;
-    if (userId)   f.userId   = userId;
-    if (action)   f.action   = action;
-    if (entity)   f.entity   = entity;
+    if (dateFrom)          f.dateFrom = dateFrom;
+    if (dateTo)            f.dateTo   = dateTo;
+    if (userId !== "all")  f.userId   = userId;
+    if (action !== "all")  f.action   = action;
+    if (entity !== "all")  f.entity   = entity;
     setOffset(0);
     setAppliedFilters(f);
   }, [dateFrom, dateTo, userId, action, entity]);
@@ -142,7 +142,7 @@ export default function Audit() {
               <Select value={userId} onValueChange={setUserId}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {users?.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -152,7 +152,7 @@ export default function Audit() {
               <Select value={action} onValueChange={setAction}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="all">Todas</SelectItem>
                   <SelectItem value="login">Ingresó</SelectItem>
                   <SelectItem value="created">Creó</SelectItem>
                   <SelectItem value="updated">Actualizó</SelectItem>
@@ -167,7 +167,7 @@ export default function Audit() {
               <Select value={entity} onValueChange={setEntity}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="sale">Venta</SelectItem>
                   <SelectItem value="quote">Cotización</SelectItem>
                   <SelectItem value="product">Producto</SelectItem>
