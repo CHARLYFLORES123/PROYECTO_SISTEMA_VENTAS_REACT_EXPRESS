@@ -53,8 +53,12 @@ router.put("/", requireAdmin, async (req, res) => {
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
   try {
     const existing = await ensureSettings();
+    const { pointsRedemptionRate, ...settingsData } = parsed.data;
     const [updated] = await db.update(businessSettingsTable)
-      .set(parsed.data)
+      .set({
+        ...settingsData,
+        ...(pointsRedemptionRate === undefined ? {} : { pointsRedemptionRate: String(pointsRedemptionRate) }),
+      })
       .where(eq(businessSettingsTable.id, existing.id))
       .returning();
     res.json(fmt(updated));
