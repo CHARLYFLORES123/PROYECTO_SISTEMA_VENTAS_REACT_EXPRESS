@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useGetBusinessSettings } from "@workspace/api-client-react";
+import { getToken } from "@/lib/auth";
 
 interface CurrencyContextType {
   currency: string;
@@ -13,7 +14,12 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [currency, setCurrencyState] = useState("BOB");
   const [currencySymbol, setCurrencySymbolState] = useState("Bs");
 
-  const { data: settings } = useGetBusinessSettings();
+  const { data: settings } = useGetBusinessSettings({
+    query: {
+      enabled: typeof window !== "undefined" && Boolean(getToken()),
+      retry: false,
+    } as any,
+  });
 
   useEffect(() => {
     if (settings) {

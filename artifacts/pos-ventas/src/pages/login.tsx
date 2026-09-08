@@ -32,7 +32,8 @@ export default function Login() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    setValue,
+    formState: { errors },
   } = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "admin@demo.com", password: "admin123" },
@@ -48,10 +49,14 @@ export default function Login() {
           toast({ title: "✓ Bienvenido", description: "Has iniciado sesión exitosamente." });
         },
         onError: (error: any) => {
+          const msg =
+            error?.data?.message ||
+            error?.message ||
+            "Credenciales incorrectas. Verifica tu correo y contraseña.";
           toast({
             variant: "destructive",
             title: "Error al iniciar sesión",
-            description: error.message || "Credenciales incorrectas.",
+            description: msg,
           });
         },
       }
@@ -94,6 +99,7 @@ export default function Login() {
               <Input
                 {...register("email")}
                 type="email"
+                autoComplete="email"
                 placeholder="admin@ejemplo.com"
                 className="h-12 border-2 rounded-xl focus:border-primary focus-visible:ring-0 transition-colors"
               />
@@ -111,6 +117,7 @@ export default function Login() {
                 <Input
                   {...register("password")}
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   className="h-12 border-2 rounded-xl focus:border-primary focus-visible:ring-0 transition-colors pr-12"
                 />
@@ -144,10 +151,10 @@ export default function Login() {
               {loginMutation.isPending ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Iniciando...
+                  <span>Iniciando...</span>
                 </>
               ) : (
-                "Iniciar sesión"
+                <span>Iniciar sesión</span>
               )}
             </button>
           </form>
@@ -160,8 +167,58 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Demo hint */}
-        
+        {/* Demo hint with 1-click buttons */}
+        <div className="mt-4 bg-white/95 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-white/40">
+          <p className="font-semibold text-xs text-muted-foreground mb-2 text-center uppercase tracking-wider">
+            Usuarios Demo (clic para autocompletar):
+          </p>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setValue("email", "admin@demo.com");
+                setValue("password", "admin123");
+              }}
+              className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium text-left transition-colors border border-blue-200/60"
+            >
+              👑 Admin
+              <span className="block text-[10px] text-blue-500 font-normal">admin@demo.com</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setValue("email", "vendedor@demo.com");
+                setValue("password", "vendedor123");
+              }}
+              className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium text-left transition-colors border border-emerald-200/60"
+            >
+              🛒 Vendedor
+              <span className="block text-[10px] text-emerald-500 font-normal">vendedor@demo.com</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setValue("email", "inventario@demo.com");
+                setValue("password", "inventario123");
+              }}
+              className="p-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium text-left transition-colors border border-purple-200/60"
+            >
+              📦 Inventario
+              <span className="block text-[10px] text-purple-500 font-normal">inventario@demo.com</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setValue("email", "compras@demo.com");
+                setValue("password", "compras123");
+              }}
+              className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium text-left transition-colors border border-amber-200/60"
+            >
+              🚚 Compras
+              <span className="block text-[10px] text-amber-500 font-normal">compras@demo.com</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function seedDemoUsers() {
   const demos = [
+    { name: "Administrador Demo", email: "admin@demo.com", password: "admin123", role: "admin" },
     { name: "Vendedor Demo", email: "vendedor@demo.com", password: "vendedor123", role: "vendedor" },
     { name: "Inventario Demo", email: "inventario@demo.com", password: "inventario123", role: "inventario" },
     { name: "Compras Demo", email: "compras@demo.com", password: "compras123", role: "compras" },
