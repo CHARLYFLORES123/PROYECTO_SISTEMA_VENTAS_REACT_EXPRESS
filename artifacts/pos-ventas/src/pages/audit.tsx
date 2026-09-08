@@ -13,6 +13,9 @@ import { getToken } from "@/lib/auth";
 import * as XLSX from "xlsx";
 
 const PAGE_SIZE = 50;
+const API_URL = (
+  import.meta.env.VITE_API_URL || `${window.location.origin}/api`
+).replace(/\/$/, "");
 
 const ACTION_COLORS: Record<string, string> = {
   login:     "bg-blue-100 text-blue-800",
@@ -47,10 +50,13 @@ async function fetchAuditLogs(params: Record<string, string | number>) {
   for (const [k, v] of Object.entries(params)) {
     if (v !== "" && v !== undefined && v !== null) qs.set(k, String(v));
   }
-  const res = await fetch(`/api/audit-logs?${qs}`, {
+  const res = await fetch(`${API_URL}/audit-logs?${qs}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
-  if (!res.ok) throw new Error("Error al cargar auditoría");
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Error al cargar auditoría");
+  }
   return res.json() as Promise<{
     total: number;
     limit: number;
@@ -84,7 +90,7 @@ export default function Audit() {
 
   const [appliedFilters, setAppliedFilters] = useState<Record<string, string | number>>({ limit: PAGE_SIZE, offset: 0 });
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["audit-logs", appliedFilters],
     queryFn: () => fetchAuditLogs(appliedFilters),
     staleTime: 30_000,
@@ -245,6 +251,8 @@ export default function Audit() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Cargando...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-destructive">{(error as Error)?.message || "Error al cargar auditoría"}</TableCell></TableRow>
               ) : !data?.data.length ? (
                 <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No hay registros</TableCell></TableRow>
               ) : data.data.map(log => (

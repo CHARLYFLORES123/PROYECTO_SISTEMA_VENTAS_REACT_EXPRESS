@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,6 +28,15 @@ export default function Register() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const registerMutation = useRegister();
+  const [businessLogo, setBusinessLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    fetch(`${apiUrl.replace(/\/$/, "")}/business-settings/public`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setBusinessLogo(data?.logoUrl ?? null))
+      .catch(() => setBusinessLogo(null));
+  }, []);
 
   const form = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
@@ -61,11 +71,24 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-md shadow-xl border-primary/20">
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{
+        backgroundImage:
+          "linear-gradient(rgba(15, 23, 42, 0.55), rgba(15, 23, 42, 0.55)), url('/images/logo.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      <Card className="w-full max-w-md shadow-2xl border-primary/20 bg-white/95 backdrop-blur-sm">
         <CardHeader className="space-y-1 text-center">
-          <div className="w-12 h-12 bg-primary text-primary-foreground rounded-lg flex items-center justify-center mx-auto mb-4 text-xl font-bold">
-            P
+          <div className="w-12 h-12 bg-primary text-primary-foreground rounded-lg flex items-center justify-center mx-auto mb-4 text-xl font-bold overflow-hidden">
+            {businessLogo ? (
+              <img src={businessLogo} alt="Logo de la empresa" className="h-full w-full object-contain bg-white p-1" onError={() => setBusinessLogo(null)} />
+            ) : (
+              "P"
+            )}
           </div>
           <CardTitle className="text-2xl font-bold">Crear Cuenta</CardTitle>
           <CardDescription>Regístrate para comenzar a usar el sistema</CardDescription>

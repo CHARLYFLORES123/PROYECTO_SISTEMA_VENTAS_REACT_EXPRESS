@@ -1,5 +1,7 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CurrencyProvider } from "@/contexts/currency-context";
@@ -67,22 +69,50 @@ function Router() {
     <Switch>
       <Route path="/" component={Login} />
       <Route path="/register" component={Register} />
-      <Route path="/:rest*" component={AuthenticatedRoutes} />
+      <Route component={AuthenticatedRoutes} />
     </Switch>
   );
 }
 
 function App() {
+  useEffect(() => {
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    const baseApiUrl = apiUrl.replace(/\/$/, "");
+
+    fetch(`${baseApiUrl}/business-settings/public`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        const companyName = data?.companyName || "POS Ventas";
+        document.title = companyName;
+
+        if (data?.logoUrl) {
+          let favicon = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
+          if (!favicon) {
+            favicon = document.createElement("link");
+            favicon.rel = "icon";
+            favicon.type = "image/png";
+            document.head.appendChild(favicon);
+          }
+          favicon.href = data.logoUrl;
+        }
+      })
+      .catch(() => {
+        document.title = "POS Ventas";
+      });
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
-      <CurrencyProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "") }>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </CurrencyProvider>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="pos-theme">
+        <CurrencyProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "") }>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </CurrencyProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

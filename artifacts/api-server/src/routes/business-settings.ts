@@ -5,7 +5,6 @@ import { UpdateBusinessSettingsBody } from "@workspace/api-zod";
 import { verifyToken, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
-router.use(verifyToken);
 
 function fmt(s: any) {
   return {
@@ -19,12 +18,26 @@ function fmt(s: any) {
   };
 }
 
+function fmtPublic(s: any) {
+  return { companyName: s.companyName, logoUrl: s.logoUrl ?? null };
+}
+
 async function ensureSettings() {
   const [existing] = await db.select().from(businessSettingsTable).limit(1);
   if (existing) return existing;
   const [created] = await db.insert(businessSettingsTable).values({}).returning();
   return created;
 }
+
+// Public branding data used by the login screen before authentication.
+router.get("/public", async (req, res) => {
+  try {
+    const settings = await ensureSettings();
+    res.json(fmtPublic(settings));
+  } catch (err) { req.log.error({ err }, "GetPublicBusinessSettings error"); res.status(500).json({ message: "Error interno" }); }
+});
+
+router.use(verifyToken);
 
 // GET — all authenticated roles
 router.get("/", async (req, res) => {

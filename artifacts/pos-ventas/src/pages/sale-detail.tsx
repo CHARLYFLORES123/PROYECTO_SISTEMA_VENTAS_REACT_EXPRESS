@@ -13,7 +13,7 @@ import { useState } from "react";
 export default function SaleDetail() {
   const [match, params] = useRoute("/sales/:id");
   const id = match ? parseInt((params as any).id) : 0;
-  const { data: sale, isLoading } = useGetSaleById(id, { query: { enabled: !!id } as any });
+  const { data: sale, isLoading, isError, error } = useGetSaleById(id, { query: { enabled: !!id } as any });
   const { data: settings } = useGetBusinessSettings();
   const { currencySymbol } = useCurrency();
   const [downloading, setDownloading] = useState(false);
@@ -38,6 +38,19 @@ export default function SaleDetail() {
       <div className="flex items-center justify-center py-20 text-muted-foreground">
         <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-2" />
         Cargando detalle...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+        <FileText className="w-10 h-10 mb-3 opacity-20" />
+        <p className="font-medium">No se pudo cargar el detalle de la venta</p>
+        <p className="text-sm mt-1">{(error as Error)?.message || "Verifica que el servidor esté disponible."}</p>
+        <Link href="/sales">
+          <Button variant="outline" size="sm" className="mt-4 rounded-full">Volver al historial</Button>
+        </Link>
       </div>
     );
   }
@@ -183,7 +196,7 @@ export default function SaleDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sale.details.map((detail, i) => (
+                {(sale.details ?? []).map((detail, i) => (
                   <TableRow key={detail.id} className="hover:bg-muted/20">
                     <TableCell className="text-muted-foreground text-sm">{i + 1}</TableCell>
                     <TableCell className="font-medium text-sm">{detail.productName}</TableCell>

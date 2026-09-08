@@ -238,6 +238,29 @@ export async function generateBoleta(
   return doc;
 }
 
+export async function emailBoleta(
+  sale: SaleForBoleta,
+  settings: BusinessSettingsForBoleta,
+  apiBase: string,
+  token: string | null,
+): Promise<void> {
+  const doc = await generateBoleta(sale, settings);
+  const dataUri = doc.output("datauristring");
+  const pdfBase64 = dataUri.slice(dataUri.indexOf(",") + 1);
+  const response = await fetch(`${apiBase}/sales/${sale.id}/email`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ pdfBase64 }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || "No se pudo enviar la boleta");
+  }
+}
+
 export function downloadBoleta(sale: SaleForBoleta, settings: BusinessSettingsForBoleta): void {
   generateBoleta(sale, settings).then((doc) => {
     doc.save(`Boleta_${String(sale.id).padStart(6, "0")}.pdf`);

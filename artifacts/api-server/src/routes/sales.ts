@@ -5,6 +5,7 @@ import { CreateSaleBody } from "@workspace/api-zod";
 import { verifyToken, requireRoles, requireAdmin, AuthRequest } from "../middlewares/auth";
 import { awardPointsForSale } from "./loyalty";
 import { auditLog } from "../lib/audit";
+import { sendSaleReceiptEmail } from "../lib/mailer";
 
 const router = Router();
 router.use(verifyToken);
@@ -153,6 +154,48 @@ router.get("/:id", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "GetSaleById error");
     res.status(500).json({ message: "Error interno" });
+  }
+});
+
+// POST /api/sales/:id/email - enviar boleta al correo del cliente
+router.post("/:id/email", async (req: AuthRequest, res) => {
+  const id = Number(req.params.id);
+  const { pdfBase64 } = req.body as { pdfBase64?: unknown };
+
+  if (!Number.isInteger(id) || typeof pdfBase64 !== "string" || !/^[A-Za-z0-9+/]*={0,2}$/.test(pdfBase64) || pdfBase64.length > 14_000_000) {
+    res.status(400).json({ message: "PDF inválido" });
+    return;
+  }
+
+  try {
+    const [row] = await db
+      .select({
+        sale: salesTable,
+        customerName: customersTable.name,
+        customerEmail: customersTable.email,
+      })
+      .from(salesTable)
+      .leftJoin(customersTable, eq(salesTable.customerId, customersTable.id))
+      .where(eq(salesTable.id, id))
+      .limit(1);
+
+    if (!row) { res.status(404).json({ message: "Venta no encontrada" }); return; }
+    if (!row.customerEmail) { res.status(400).json({ message: "El cliente no tiene un correo registrado" }); return; }
+
+    const [settings] = await db.select().from(businessSettingsTable).limit(1);
+    await sendSaleReceiptEmail({
+      to: row.customerEmail,
+      customerName: row.customerName ?? "cliente",
+      saleId: id,
+      total: Number(row.sale.total),
+      companyName: settings?.companyName ?? "Punto de Venta",
+      pdf: Buffer.from(pdfBase64, "base64"),
+    });
+
+    res.json({ message: "Boleta enviada correctamente" });
+  } catch (err) {
+    req.log.error({ err, saleId: id }, "SendSaleReceiptEmail error");
+    res.status(500).json({ message: "No se pudo enviar la boleta por correo" });
   }
 });
 

@@ -147,6 +147,37 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+.dark {
+  --background: 222 47% 8%;
+  --foreground: 210 40% 96%;
+  --border: 217 19% 24%;
+  --input: 217 19% 24%;
+  --card: 222 38% 12%;
+  --card-foreground: 210 40% 96%;
+  --card-border: 217 19% 24%;
+  --popover: 222 38% 12%;
+  --popover-foreground: 210 40% 96%;
+  --popover-border: 217 19% 24%;
+  --secondary: 217 25% 18%;
+  --secondary-foreground: 210 40% 96%;
+  --muted: 217 25% 18%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 243 45% 22%;
+  --accent-foreground: 230 90% 85%;
+  --sidebar: 222 38% 10%;
+  --sidebar-foreground: 210 40% 96%;
+  --sidebar-border: 217 19% 24%;
+  --sidebar-accent: 243 45% 22%;
+  --sidebar-accent-foreground: 230 90% 92%;
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
 @layer base {
   * {
     @apply border-border;

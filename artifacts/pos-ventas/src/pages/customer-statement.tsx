@@ -20,13 +20,18 @@ import { format, startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval
 import { Toast } from "@/lib/swal";
 import { downloadStatementPDF, printStatementPDF, type CustomerStatement, type StatementSale } from "@/lib/generate-statement";
 
-const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+const API_URL = (
+  import.meta.env.VITE_API_URL || `${window.location.origin}/api`
+).replace(/\/$/, "");
 
 async function fetchCustomerSales(customerId: number): Promise<StatementSale[]> {
-  const res = await fetch(`${BASE}/api/sales?customerId=${customerId}&limit=500`, {
+  const res = await fetch(`${API_URL}/sales?customerId=${customerId}&limit=500`, {
     headers: { Authorization: `Bearer ${localStorage.getItem("pos_token")}` },
   });
-  if (!res.ok) throw new Error("Error al cargar ventas");
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Error al cargar ventas");
+  }
   const data = await res.json();
   return (data.sales ?? data).map((s: any) => ({
     id: s.id,

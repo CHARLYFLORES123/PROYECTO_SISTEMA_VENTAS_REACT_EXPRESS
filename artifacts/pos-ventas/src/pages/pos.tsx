@@ -11,10 +11,12 @@ import { TierBadge } from "@/pages/loyalty";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { BoletaModal } from "@/components/boleta-modal";
+import { emailBoleta } from "@/lib/generate-boleta";
 import { Toast, Swal } from "@/lib/swal";
 import { getToken } from "@/lib/auth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL || `${window.location.origin}/api`).replace(/\/$/, "");
 async function apiFetch(path: string, opts: RequestInit = {}) {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
@@ -383,7 +385,7 @@ export default function POS() {
         items: cartSnapshot.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
       },
     }, {
-      onSuccess: (sale) => {
+      onSuccess: async (sale) => {
         const saleForModal: CompletedSaleForModal = {
           id: sale.id,
           customerName: selectedCustomer?.name ?? null,
@@ -404,6 +406,11 @@ export default function POS() {
           })),
         };
         setCompletedSale(saleForModal);
+        if (selectedCustomer?.email && settings) {
+          emailBoleta(saleForModal, settings, API_URL, getToken())
+            .then(() => Toast.fire({ icon: "success", title: "Boleta enviada al correo del cliente" }))
+            .catch((err: Error) => Toast.fire({ icon: "warning", title: "Venta registrada", text: err.message }));
+        }
         // Redeem coupon if one was applied
         if (couponSnapshot) {
           apiFetch("/api/coupons/redeem", {

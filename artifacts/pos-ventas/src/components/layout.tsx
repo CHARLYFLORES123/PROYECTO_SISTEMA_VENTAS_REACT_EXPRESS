@@ -25,10 +25,21 @@ import {
   Star,
   Shield,
   Download,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCurrency } from "@/contexts/currency-context";
 import { NotificationBell } from "@/components/notification-bell";
+import { useTheme } from "next-themes";
 
 // ── Role definitions ──────────────────────────────────────────────────────────
 
@@ -120,6 +131,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const { currencySymbol } = useCurrency();
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDarkMode = resolvedTheme === "dark";
 
   const handleBackup = async () => {
     setBackupLoading(true);
@@ -218,7 +231,12 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b border-sidebar-border shrink-0">
         {settings?.logoUrl ? (
-          <img src={settings.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+          <div className="flex items-center gap-2.5 min-w-0">
+            <img src={settings.logoUrl} alt="Logo" className="h-8 max-w-22 object-contain shrink-0" onError={(e) => (e.currentTarget.style.display = "none")} />
+            <span className="font-bold text-sidebar-foreground truncate text-sm" title={settings.companyName || "POS Ventas"}>
+              {settings.companyName || "POS Ventas"}
+            </span>
+          </div>
         ) : (
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
@@ -255,26 +273,6 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
       </nav>
 
-      {/* User footer */}
-      <div className="border-t border-sidebar-border p-3 shrink-0">
-        <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-sidebar-accent transition-colors">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-            <span className="text-xs font-semibold text-primary">{user.name.charAt(0).toUpperCase()}</span>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <p className="text-sm font-semibold text-sidebar-foreground truncate">{user.name}</p>
-            <p className="text-xs text-muted-foreground truncate capitalize">{user.role}</p>
-          </div>
-          {userRole === "admin" && (
-            <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-primary shrink-0" onClick={handleBackup} disabled={backupLoading} title="Descargar Backup">
-              <Download className={`w-3.5 h-3.5 ${backupLoading ? "animate-bounce" : ""}`} />
-            </Button>
-          )}
-          <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive shrink-0" onClick={handleLogout} title="Cerrar Sesión">
-            <LogOut className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      </div>
     </div>
   );
 
@@ -305,11 +303,48 @@ export function Layout({ children }: { children: ReactNode }) {
               <span className="text-primary/70">{settings?.currency || "BOB"}</span>
             </div>
             {userRole === "admin" && <NotificationBell />}
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold text-white">{user.name.charAt(0).toUpperCase()}</span>
-              </div>
-              <span className="hidden sm:block text-sm font-medium text-foreground">{user.name}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-8 h-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setTheme(isDarkMode ? "light" : "dark")}
+              title={isDarkMode ? "Activar modo claro" : "Activar modo oscuro"}
+              aria-label={isDarkMode ? "Activar modo claro" : "Activar modo oscuro"}
+            >
+              {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </Button>
+            <div className="flex items-center gap-2 border-l border-border pl-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-9 gap-2 px-2 hover:bg-muted" title="Abrir menú de usuario">
+                    <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
+                      <span className="text-xs font-bold text-white">{user.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div className="hidden sm:block max-w-36 text-left leading-tight">
+                      <p className="text-sm font-medium text-foreground truncate" title={user.name}>{user.name}</p>
+                      <p className="text-[11px] text-muted-foreground capitalize truncate">{user.role}</p>
+                    </div>
+                    <ChevronRight className="hidden sm:block h-4 w-4 rotate-90 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <p className="truncate">{user.name}</p>
+                    <p className="text-xs font-normal text-muted-foreground capitalize">{user.role}</p>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {userRole === "admin" && (
+                    <DropdownMenuItem onSelect={handleBackup} disabled={backupLoading}>
+                      <Download className={backupLoading ? "animate-bounce" : ""} />
+                      {backupLoading ? "Generando backup..." : "Descargar Backup"}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={handleLogout} className="text-destructive focus:text-destructive">
+                    <LogOut />
+                    Cerrar Sesión
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>

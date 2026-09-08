@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,6 +19,15 @@ export default function Login() {
   const { toast } = useToast();
   const loginMutation = useLogin();
   const [showPassword, setShowPassword] = useState(false);
+  const [businessLogo, setBusinessLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    fetch(`${apiUrl.replace(/\/$/, "")}/business-settings/public`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setBusinessLogo(data?.logoUrl ?? null))
+      .catch(() => setBusinessLogo(null));
+  }, []);
 
   const {
     register,
@@ -50,14 +59,27 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "hsl(220 20% 95%)" }}>
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{
+        backgroundImage:
+          "linear-gradient(rgba(15, 23, 42, 0.55), rgba(15, 23, 42, 0.55)), url('/images/logo.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
       <div className="w-full max-w-sm">
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 border border-white/40">
           {/* Logo */}
           <div className="flex flex-col items-center mb-7">
-            <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mb-3 shadow-md shadow-primary/30">
-              <Building2 className="w-8 h-8 text-white" />
+            <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mb-3 shadow-md shadow-primary/30 overflow-hidden">
+              {businessLogo ? (
+                <img src={businessLogo} alt="Logo de la empresa" className="h-full w-full object-contain bg-white p-1" onError={() => setBusinessLogo(null)} />
+              ) : (
+                <Building2 className="w-8 h-8 text-white" />
+              )}
             </div>
             <h1 className="text-2xl font-bold text-foreground">Iniciar sesión</h1>
             <p className="text-sm text-muted-foreground mt-1">Ingresa tus credenciales para continuar</p>
@@ -139,9 +161,7 @@ export default function Login() {
         </div>
 
         {/* Demo hint */}
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          Demo: <span className="font-mono bg-white/60 px-1.5 py-0.5 rounded">admin@demo.com</span> / <span className="font-mono bg-white/60 px-1.5 py-0.5 rounded">admin123</span>
-        </p>
+        
       </div>
     </div>
   );
