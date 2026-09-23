@@ -39,7 +39,7 @@ const schema = z.object({
 
 const ROLE_PERMISSIONS_SUMMARY: Record<string, string> = {
   admin:      "Acceso completo",
-  vendedor:   "Ventas: crear · Clientes: crear, editar",
+  vendedor:   "Ventas: crear · Clientes · Reportes · Fidelización",
   inventario: "Productos/Categorías/Marcas: crear, editar",
   compras:    "Proveedores: crear, editar · Cotizaciones: crear",
 };

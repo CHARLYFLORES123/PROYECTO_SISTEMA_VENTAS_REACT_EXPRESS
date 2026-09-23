@@ -59,17 +59,23 @@ export default function Sales() {
 
   const exportToExcel = () => {
     if (!sales?.length) return;
-    const data = sales.map(s => ({
-      "N° Venta": `#${String(s.id).padStart(6, "0")}`,
-      "Cliente": (s as any).customerName || "Consumidor Final",
-      "Vendedor": (s as any).userName || "-",
-      "Fecha": new Date(s.createdAt).toLocaleString(),
-      "Método Pago": s.paymentMethod,
-      "Subtotal": s.subtotal,
-      "IVA": s.iva,
-      "Total": s.total,
-      "Estado": s.status,
-    }));
+    const data = sales.map(s => {
+      const isCash = (s.paymentMethod || "").toLowerCase().includes("efectivo") || (s as any).amountPaid != null;
+      const rec = (s as any).amountPaid != null ? Number((s as any).amountPaid) : (isCash ? Number(s.total) : "");
+      const chg = (s as any).changeDue != null ? Number((s as any).changeDue) : (isCash ? 0 : "");
+      return {
+        "N° Venta": `#${String(s.id).padStart(6, "0")}`,
+        "Cliente": (s as any).customerName || "Consumidor Final",
+        "Vendedor": (s as any).userName || "-",
+        "Fecha": new Date(s.createdAt).toLocaleString(),
+        "Método Pago": s.paymentMethod,
+        "Subtotal": s.subtotal,
+        "Total": s.total,
+        "Monto Recibido": rec,
+        "Cambio Devuelto": chg,
+        "Estado": s.status,
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Historial");
@@ -171,7 +177,7 @@ export default function Sales() {
                 <TableHead className="font-semibold text-xs uppercase tracking-wide">Cliente</TableHead>
                 <TableHead className="font-semibold text-xs uppercase tracking-wide hidden md:table-cell">Vendedor</TableHead>
                 <TableHead className="font-semibold text-xs uppercase tracking-wide hidden sm:table-cell">Fecha</TableHead>
-                <TableHead className="font-semibold text-xs uppercase tracking-wide hidden lg:table-cell">Método Pago</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wide hidden md:table-cell">Método Pago</TableHead>
                 <TableHead className="font-semibold text-xs uppercase tracking-wide text-center">Estado</TableHead>
                 <TableHead className="font-semibold text-xs uppercase tracking-wide text-right">Total</TableHead>
                 <TableHead className="w-10"></TableHead>
@@ -195,7 +201,12 @@ export default function Sales() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sales?.map(sale => (
+                sales?.map(sale => {
+                  const isCash = (sale.paymentMethod || "").toLowerCase().includes("efectivo") || (sale as any).amountPaid != null;
+                  const rec = (sale as any).amountPaid != null ? Number((sale as any).amountPaid) : (isCash ? Number(sale.total) : null);
+                  const chg = (sale as any).changeDue != null ? Number((sale as any).changeDue) : (isCash ? 0 : null);
+
+                  return (
                   <TableRow key={sale.id} className="hover:bg-muted/20 transition-colors">
                     <TableCell className="font-mono font-bold text-primary text-sm">
                       #{String(sale.id).padStart(6, "0")}
@@ -211,14 +222,34 @@ export default function Sales() {
                         day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
                       })}
                     </TableCell>
-                    <TableCell className="text-sm hidden lg:table-cell">{sale.paymentMethod}</TableCell>
+                    <TableCell className="text-sm hidden md:table-cell">
+                      <div>
+                        <span className="font-medium text-xs">{sale.paymentMethod}</span>
+                        {isCash && rec !== null && (
+                          <div className="mt-0.5 space-y-0.5 text-[11px] font-mono leading-tight">
+                            <span className="block text-muted-foreground">
+                              Recibido: <strong className="text-foreground font-semibold">{formatCurrency(rec, currencySymbol)}</strong>
+                            </span>
+                            <span className="block text-emerald-700 font-bold">
+                              Cambio: {formatCurrency(chg ?? 0, currencySymbol)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center">
                       <span className={sale.status === "completada" ? "badge-completed" : "badge-cancelled"}>
                         {sale.status === "completada" ? "COMPLETADO" : "ANULADO"}
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-bold text-sm">
-                      {formatCurrency(sale.total, currencySymbol)}
+                      <div>{formatCurrency(sale.total, currencySymbol)}</div>
+                      {isCash && rec !== null && (
+                        <div className="text-[10px] font-mono font-normal text-muted-foreground md:hidden mt-0.5 text-right">
+                          <div>Rec: {formatCurrency(rec, currencySymbol)}</div>
+                          <div className="text-emerald-700 font-semibold">Cambio: {formatCurrency(chg ?? 0, currencySymbol)}</div>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -245,8 +276,9 @@ export default function Sales() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                );
+              })
+            )}
             </TableBody>
           </Table>
         </div>

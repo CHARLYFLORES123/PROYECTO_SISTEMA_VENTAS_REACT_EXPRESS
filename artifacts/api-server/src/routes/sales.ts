@@ -1,9 +1,13 @@
 import { Router } from "express";
-import { db, salesTable, saleDetailsTable, productsTable, customersTable, usersTable, businessSettingsTable } from "@workspace/db";
+import {
+  db, salesTable, saleDetailsTable, productsTable,
+  customersTable, usersTable, businessSettingsTable,
+  customerPointsTable, pointsTransactionsTable, getTierForLifetime,
+} from "@workspace/db";
 import { eq, gte, lte, and, sql } from "drizzle-orm";
 import { CreateSaleBody } from "@workspace/api-zod";
 import { verifyToken, requireRoles, requireAdmin, AuthRequest } from "../middlewares/auth";
-import { awardPointsForSale } from "./loyalty";
+import { awardPointsForSale, getOrCreateBalance } from "./loyalty";
 import { auditLog } from "../lib/audit";
 import { sendSaleReceiptEmail } from "../lib/mailer";
 
@@ -12,14 +16,24 @@ router.use(verifyToken);
 
 const canCreate = requireRoles(["admin", "vendedor"]);
 
-const IVA_RATE = 0.13;
+const IVA_RATE = 0;
 
-function formatSale(s: any, customerName?: string | null, userName?: string | null) {
+function formatSale(
+  s: any,
+  customerName?: string | null,
+  userName?: string | null,
+  customerNitCi?: string | null,
+  customerPhone?: string | null
+) {
   return {
     id: s.id, customerId: s.customerId ?? null, customerName: customerName ?? null,
+    customerNitCi: customerNitCi ?? null, customerPhone: customerPhone ?? null,
     userId: s.userId ?? null, userName: userName ?? null,
     subtotal: Number(s.subtotal), iva: Number(s.iva), total: Number(s.total),
-    paymentMethod: s.paymentMethod, status: s.status, notes: s.notes ?? null,
+    paymentMethod: s.paymentMethod,
+    amountPaid: s.amountPaid !== null && s.amountPaid !== undefined ? Number(s.amountPaid) : null,
+    changeDue: s.changeDue !== null && s.changeDue !== undefined ? Number(s.changeDue) : null,
+    status: s.status, notes: s.notes ?? null,
     createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
   };
 }
@@ -29,7 +43,13 @@ router.get("/", async (req: AuthRequest, res) => {
   const { dateFrom, dateTo, customerId, userId } = req.query as any;
   try {
     const rows = await db
-      .select({ sale: salesTable, customerName: customersTable.name, userName: usersTable.name })
+      .select({
+        sale: salesTable,
+        customerName: customersTable.name,
+        customerNitCi: customersTable.nitCi,
+        customerPhone: customersTable.phone,
+        userName: usersTable.name,
+      })
       .from(salesTable)
       .leftJoin(customersTable, eq(salesTable.customerId, customersTable.id))
       .leftJoin(usersTable, eq(salesTable.userId, usersTable.id))
@@ -43,7 +63,7 @@ router.get("/", async (req: AuthRequest, res) => {
       )
       .orderBy(sql`${salesTable.createdAt} DESC`);
 
-    res.json(rows.map(r => formatSale(r.sale, r.customerName, r.userName)));
+    res.json(rows.map(r => formatSale(r.sale, r.customerName, r.userName, r.customerNitCi, r.customerPhone)));
   } catch (err) {
     req.log.error({ err }, "GetSales error");
     res.status(500).json({ message: "Error interno" });
@@ -55,7 +75,7 @@ router.post("/", canCreate, async (req: AuthRequest, res) => {
   const parsed = CreateSaleBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Datos inválidos" }); return; }
 
-  const { customerId, items, paymentMethod, notes } = parsed.data;
+  const { customerId, items, paymentMethod, notes, amountPaid, changeDue } = parsed.data;
 
   try {
     const productIds = items.map(i => i.productId);
@@ -73,18 +93,23 @@ router.post("/", canCreate, async (req: AuthRequest, res) => {
       }
     }
 
-    const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-    const iva = subtotal * IVA_RATE;
-    const total = subtotal + iva;
+    const discount = Math.max(0, Number((req.body as any).discount ?? 0));
+    const grossSubtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+    const subtotal = Math.max(0, grossSubtotal - discount);
+    const iva = 0;
+    const total = +subtotal.toFixed(2);
 
     const result = await db.transaction(async (tx) => {
       const [sale] = await tx.insert(salesTable).values({
         customerId: customerId ?? null,
         userId: req.userId ?? null,
         subtotal: String(subtotal.toFixed(2)),
+        discount: String(discount.toFixed(2)),
         iva: String(iva.toFixed(2)),
         total: String(total.toFixed(2)),
         paymentMethod,
+        amountPaid: amountPaid !== null && amountPaid !== undefined ? String(Number(amountPaid).toFixed(2)) : null,
+        changeDue: changeDue !== null && changeDue !== undefined ? String(Number(changeDue).toFixed(2)) : null,
         notes: notes ?? null,
       }).returning();
 
@@ -103,21 +128,40 @@ router.post("/", canCreate, async (req: AuthRequest, res) => {
     });
 
     let customerName: string | null = null;
+    let customerNitCi: string | null = null;
+    let customerPhone: string | null = null;
     if (customerId) {
-      const [c] = await db.select({ name: customersTable.name }).from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      const [c] = await db
+        .select({
+          name: customersTable.name,
+          nitCi: customersTable.nitCi,
+          phone: customersTable.phone,
+        })
+        .from(customersTable)
+        .where(eq(customersTable.id, customerId))
+        .limit(1);
       customerName = c?.name ?? null;
+      customerNitCi = c?.nitCi ?? null;
+      customerPhone = c?.phone ?? null;
     }
 
+    let pointsEarned = 0;
     try {
       const [settings] = await db.select().from(businessSettingsTable).limit(1);
-      if (settings?.loyaltyEnabled && customerId) {
-        await awardPointsForSale(customerId, result.id, Number(result.total), settings.pointsPerUnit);
+      const loyaltyActive = settings?.loyaltyEnabled ?? true;
+      // Regla de negocio: si el cliente canjeó su descuento en esta venta,
+      // no se le asignan puntos ni descuento adicional.
+      const saleHadRedemption = Math.max(0, Number((req.body as any).discount ?? 0)) > 0;
+      if (loyaltyActive && customerId && !saleHadRedemption) {
+        const pointsPerUnit = Number(settings?.pointsPerUnit ?? 1);
+        const pointsRes = await awardPointsForSale(customerId, result.id, Number(result.total), pointsPerUnit);
+        pointsEarned = typeof pointsRes === "object" && pointsRes ? pointsRes.earned : Number(pointsRes) || 0;
       }
     } catch (pointsErr) {
       req.log.warn({ err: pointsErr }, "Failed to award loyalty points (non-fatal)");
     }
 
-    res.status(201).json({ ...formatSale(result, customerName), pointsEarned: 0 });
+    res.status(201).json({ ...formatSale(result, customerName, null, customerNitCi, customerPhone), pointsEarned });
     auditLog({
       req, action: "created", entity: "sale", entityId: result.id,
       entityName: customerName ?? `Venta #${result.id}`,
@@ -134,7 +178,13 @@ router.get("/:id", async (req, res) => {
   const id = Number(req.params.id);
   try {
     const [row] = await db
-      .select({ sale: salesTable, customerName: customersTable.name, userName: usersTable.name })
+      .select({
+        sale: salesTable,
+        customerName: customersTable.name,
+        customerNitCi: customersTable.nitCi,
+        customerPhone: customersTable.phone,
+        userName: usersTable.name,
+      })
       .from(salesTable)
       .leftJoin(customersTable, eq(salesTable.customerId, customersTable.id))
       .leftJoin(usersTable, eq(salesTable.userId, usersTable.id))
@@ -144,8 +194,25 @@ router.get("/:id", async (req, res) => {
     if (!row) { res.status(404).json({ message: "Venta no encontrada" }); return; }
 
     const details = await db.select().from(saleDetailsTable).where(eq(saleDetailsTable.saleId, id));
+
+    let pointsEarned = 0;
+    if (row.sale.customerId) {
+      const [tx] = await db
+        .select({ delta: pointsTransactionsTable.delta })
+        .from(pointsTransactionsTable)
+        .where(
+          and(
+            eq(pointsTransactionsTable.saleId, id),
+            eq(pointsTransactionsTable.type, "earned")
+          )
+        )
+        .limit(1);
+      pointsEarned = tx?.delta ?? 0;
+    }
+
     res.json({
-      ...formatSale(row.sale, row.customerName, row.userName),
+      ...formatSale(row.sale, row.customerName, row.userName, row.customerNitCi, row.customerPhone),
+      pointsEarned,
       details: details.map(d => ({
         id: d.id, productId: d.productId ?? null, productName: d.productName,
         quantity: d.quantity, unitPrice: Number(d.unitPrice), subtotal: Number(d.subtotal),
@@ -193,9 +260,9 @@ router.post("/:id/email", async (req: AuthRequest, res) => {
     });
 
     res.json({ message: "Boleta enviada correctamente" });
-  } catch (err) {
+  } catch (err: any) {
     req.log.error({ err, saleId: id }, "SendSaleReceiptEmail error");
-    res.status(500).json({ message: "No se pudo enviar la boleta por correo" });
+    res.status(500).json({ message: err?.message || "No se pudo enviar la boleta por correo" });
   }
 });
 
@@ -216,6 +283,39 @@ router.post("/:id/cancel", requireAdmin, async (req: AuthRequest, res) => {
           await tx.update(productsTable)
             .set({ stock: sql`${productsTable.stock} + ${d.quantity}` })
             .where(eq(productsTable.id, d.productId));
+        }
+      }
+
+      if (sale.customerId) {
+        const [earnedTx] = await tx
+          .select()
+          .from(pointsTransactionsTable)
+          .where(
+            and(
+              eq(pointsTransactionsTable.saleId, id),
+              eq(pointsTransactionsTable.type, "earned")
+            )
+          )
+          .limit(1);
+
+        if (earnedTx && earnedTx.delta > 0) {
+          const bal = await getOrCreateBalance(tx, sale.customerId);
+          const newPoints = Math.max(0, bal.points - earnedTx.delta);
+          const newLifetime = Math.max(0, bal.lifetimeEarned - earnedTx.delta);
+          const newTier = getTierForLifetime(newLifetime);
+          await tx.update(customerPointsTable).set({
+            points: newPoints,
+            lifetimeEarned: newLifetime,
+            tier: newTier,
+          }).where(eq(customerPointsTable.customerId, sale.customerId));
+
+          await tx.insert(pointsTransactionsTable).values({
+            customerId: sale.customerId,
+            delta: -earnedTx.delta,
+            type: "adjusted",
+            saleId: id,
+            notes: `Reversión por cancelación de venta #${String(id).padStart(6, "0")}`,
+          });
         }
       }
     });

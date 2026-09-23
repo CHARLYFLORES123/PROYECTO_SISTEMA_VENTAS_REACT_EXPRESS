@@ -11,6 +11,12 @@ out-tsc
 # dependencies
 node_modules
 
+# environment variables
+.env
+.env.*
+.env.local
+!.env.example
+
 # IDEs and editors
 /.idea
 .project
@@ -21,11 +27,7 @@ node_modules
 *.sublime-workspace
 
 # IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+.vscode/
 
 # misc
 /.sass-cache
@@ -40,6 +42,7 @@ testem.log
 # System Files
 .DS_Store
 Thumbs.db
+powershell.cmd
 
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md

@@ -3,6 +3,7 @@ import { db, businessSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { UpdateBusinessSettingsBody } from "@workspace/api-zod";
 import { verifyToken, requireAdmin } from "../middlewares/auth";
+import { syncCustomerLoyaltyPoints } from "./loyalty";
 
 const router = Router();
 
@@ -14,6 +15,9 @@ function fmt(s: any) {
     loyaltyEnabled: s.loyaltyEnabled ?? false,
     pointsPerUnit: s.pointsPerUnit ?? 1,
     pointsRedemptionRate: Number(s.pointsRedemptionRate ?? 0.01),
+    openCashDrawer: s.openCashDrawer ?? true,
+    cashDrawerOnlyCash: s.cashDrawerOnlyCash ?? true,
+    printerName: s.printerName ?? null,
     updatedAt: s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt,
   };
 }
@@ -24,8 +28,17 @@ function fmtPublic(s: any) {
 
 async function ensureSettings() {
   const [existing] = await db.select().from(businessSettingsTable).limit(1);
-  if (existing) return existing;
-  const [created] = await db.insert(businessSettingsTable).values({}).returning();
+  if (existing) {
+    if (existing.loyaltyEnabled === false) {
+      const [updated] = await db.update(businessSettingsTable)
+        .set({ loyaltyEnabled: true })
+        .where(eq(businessSettingsTable.id, existing.id))
+        .returning();
+      return updated;
+    }
+    return existing;
+  }
+  const [created] = await db.insert(businessSettingsTable).values({ loyaltyEnabled: true }).returning();
   return created;
 }
 
@@ -61,6 +74,15 @@ router.put("/", requireAdmin, async (req, res) => {
       })
       .where(eq(businessSettingsTable.id, existing.id))
       .returning();
+
+    if (updated.loyaltyEnabled && !existing.loyaltyEnabled) {
+      try {
+        await syncCustomerLoyaltyPoints();
+      } catch (syncErr) {
+        req.log.warn({ err: syncErr }, "Failed to auto-sync loyalty points on enable");
+      }
+    }
+
     res.json(fmt(updated));
   } catch (err) { req.log.error({ err }, "UpdateBusinessSettings error"); res.status(500).json({ message: "Error interno" }); }
 });

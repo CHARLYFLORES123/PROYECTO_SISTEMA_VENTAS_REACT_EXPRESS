@@ -200,6 +200,10 @@ export interface CreateSaleBody {
   items: SaleItem[];
   paymentMethod: string;
   /** @nullable */
+  amountPaid?: number | null;
+  /** @nullable */
+  changeDue?: number | null;
+  /** @nullable */
   notes?: string | null;
 }
 
@@ -227,6 +231,10 @@ export interface Sale {
   iva: number;
   total: number;
   paymentMethod: string;
+  /** @nullable */
+  amountPaid?: number | null;
+  /** @nullable */
+  changeDue?: number | null;
   status: string;
   /** @nullable */
   notes?: string | null;
@@ -247,6 +255,10 @@ export interface SaleWithDetails {
   iva: number;
   total: number;
   paymentMethod: string;
+  /** @nullable */
+  amountPaid?: number | null;
+  /** @nullable */
+  changeDue?: number | null;
   status: string;
   /** @nullable */
   notes?: string | null;

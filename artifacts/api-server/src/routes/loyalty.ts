@@ -1,10 +1,10 @@
 import { Router } from "express";
 import {
   db, customerPointsTable, pointsTransactionsTable,
-  businessSettingsTable, customersTable,
+  businessSettingsTable, customersTable, salesTable,
   TIER_CONFIG, getTierForLifetime,
 } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, asc, and, ne, isNotNull, sql } from "drizzle-orm";
 import { verifyToken, AuthRequest } from "../middlewares/auth";
 import { issueTierCoupon } from "./coupons";
 
@@ -13,12 +13,12 @@ router.use(verifyToken);
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-async function getSettings() {
+export async function getSettings() {
   const [s] = await db.select().from(businessSettingsTable).limit(1);
   return s ?? null;
 }
 
-async function getOrCreateBalance(tx: any, customerId: number) {
+export async function getOrCreateBalance(tx: any, customerId: number) {
   const [row] = await tx
     .select()
     .from(customerPointsTable)
@@ -49,7 +49,7 @@ function buildTierInfo(tier: string, lifetimeEarned: number) {
   };
 }
 
-// ── Award points (called internally from sales route) ─────────────────────────
+// ── Award points (called internally from sales route or sync) ───────────────────
 export async function awardPointsForSale(
   customerId: number,
   saleId: number,
@@ -57,14 +57,35 @@ export async function awardPointsForSale(
   pointsPerUnit: number
 ) {
   return await db.transaction(async (tx) => {
+    // Nota: un cliente con balance 0 (canjeó todos sus descuentos) SÍ vuelve a
+    // acumular puntos en su próxima compra sin canje — su tier fue reiniciado a
+    // bronce al momento del canje total.
+
+    // Idempotency: don't award twice for the same sale
+    const [existingTx] = await tx
+      .select()
+      .from(pointsTransactionsTable)
+      .where(
+        and(
+          eq(pointsTransactionsTable.saleId, saleId),
+          eq(pointsTransactionsTable.type, "earned")
+        )
+      )
+      .limit(1);
+    if (existingTx) {
+      return { earned: existingTx.delta, tieredUp: false, newTier: "bronze", couponCode: null };
+    }
+
     const bal = await getOrCreateBalance(tx, customerId);
     const currentTier = (bal.tier as keyof typeof TIER_CONFIG) ?? "bronze";
-    const multiplier = TIER_CONFIG[currentTier]?.multiplier ?? 1;
 
-    const baseEarned = Math.floor(totalAmount * pointsPerUnit);
-    if (baseEarned <= 0) return 0;
+    // Sin multiplicador de nivel: los puntos asignados son exactamente el total
+    // de la venta (redondeado) × pointsPerUnit.
+    const earned = Math.max(0, Math.round(totalAmount * pointsPerUnit));
+    if (earned <= 0) {
+      return { earned: 0, tieredUp: false, newTier: currentTier, couponCode: null };
+    }
 
-    const earned = Math.floor(baseEarned * multiplier);
     const newLifetime = bal.lifetimeEarned + earned;
     const newTier = getTierForLifetime(newLifetime);
     const tieredUp = newTier !== currentTier;
@@ -79,13 +100,12 @@ export async function awardPointsForSale(
       .where(eq(customerPointsTable.customerId, customerId));
 
     const noteBase = `Puntos ganados por venta #${String(saleId).padStart(6, "0")}`;
-    const noteMultiplier = multiplier > 1 ? ` (×${multiplier} nivel ${TIER_CONFIG[currentTier].label})` : "";
     await tx.insert(pointsTransactionsTable).values({
       customerId,
       delta: earned,
       type: "earned",
       saleId,
-      notes: noteBase + noteMultiplier,
+      notes: noteBase,
     });
 
     let couponCode: string | null = null;
@@ -104,7 +124,7 @@ export async function awardPointsForSale(
           customerId,
           delta: 0,
           type: "coupon",
-          notes: `¡Cupón generado: ${coupon.code} — ${TIER_CONFIG[newTier] ? "" : ""}${newTier === "gold" ? "10" : "5"}% de descuento!`,
+          notes: `¡Cupón generado: ${coupon.code} — ${newTier === "gold" ? "10" : "5"}% de descuento!`,
         });
       }
     }
@@ -113,16 +133,104 @@ export async function awardPointsForSale(
   });
 }
 
+// ── Sincronizar puntos de ventas existentes de clientes ────────────────────────
+export async function syncCustomerLoyaltyPoints() {
+  const settings = await getSettings();
+  if (!settings?.loyaltyEnabled) return { processed: 0, totalSales: 0 };
+
+  const pointsPerUnit = Number(settings.pointsPerUnit ?? 1);
+
+  // 1. Obtener todas las ventas completadas asociadas a clientes registrados
+  const sales = await db
+    .select({
+      id: salesTable.id,
+      customerId: salesTable.customerId,
+      total: salesTable.total,
+      discount: salesTable.discount,
+      status: salesTable.status,
+      createdAt: salesTable.createdAt,
+    })
+    .from(salesTable)
+    .where(
+      and(
+        isNotNull(salesTable.customerId),
+        ne(salesTable.status, "cancelada")
+      )
+    )
+    .orderBy(asc(salesTable.createdAt));
+
+  let processed = 0;
+
+  for (const sale of sales) {
+    if (!sale.customerId) continue;
+
+    // No re-otorgar puntos si la venta incluyó canje de descuento
+    const [redemptionTx] = await db
+      .select({ id: pointsTransactionsTable.id })
+      .from(pointsTransactionsTable)
+      .where(
+        and(
+          eq(pointsTransactionsTable.saleId, sale.id),
+          eq(pointsTransactionsTable.type, "redeemed")
+        )
+      )
+      .limit(1);
+    if (redemptionTx) continue;
+
+    // No otorgar puntos en ventas que aplicaron descuento (canje o cupon)
+    if (Number(sale.discount ?? 0) > 0) continue;
+
+    const [existingTx] = await db
+      .select({ id: pointsTransactionsTable.id })
+      .from(pointsTransactionsTable)
+      .where(
+        and(
+          eq(pointsTransactionsTable.saleId, sale.id),
+          eq(pointsTransactionsTable.type, "earned")
+        )
+      )
+      .limit(1);
+
+    if (!existingTx) {
+      await awardPointsForSale(sale.customerId, sale.id, Number(sale.total), pointsPerUnit);
+      processed++;
+    }
+  }
+
+  // 2. Asegurar que todos los clientes registrados tengan registro en customerPointsTable
+  const allCustomers = await db.select({ id: customersTable.id }).from(customersTable);
+  for (const c of allCustomers) {
+    const [existing] = await db
+      .select({ id: customerPointsTable.id })
+      .from(customerPointsTable)
+      .where(eq(customerPointsTable.customerId, c.id))
+      .limit(1);
+    if (!existing) {
+      await db.insert(customerPointsTable).values({
+        customerId: c.id,
+        points: 0,
+        lifetimeEarned: 0,
+        lifetimeRedeemed: 0,
+        tier: "bronze",
+      });
+    }
+  }
+
+  return { processed, totalSales: sales.length };
+}
+
 // ── GET /api/loyalty/balance/:customerId ──────────────────────────────────────
 router.get("/balance/:customerId", async (req, res) => {
   const customerId = Number(req.params.customerId);
   try {
     const settings = await getSettings();
-    const [bal] = await db
+    const [c] = await db
       .select()
-      .from(customerPointsTable)
-      .where(eq(customerPointsTable.customerId, customerId))
+      .from(customersTable)
+      .where(eq(customersTable.id, customerId))
       .limit(1);
+
+    const bal = await getOrCreateBalance(db, customerId);
 
     const points = bal?.points ?? 0;
     const lifetimeEarned = bal?.lifetimeEarned ?? 0;
@@ -131,13 +239,17 @@ router.get("/balance/:customerId", async (req, res) => {
 
     res.json({
       customerId,
+      customerName: c?.name ?? null,
+      customerEmail: c?.email ?? null,
+      customerPhone: c?.phone ?? null,
+      customerNitCi: c?.nitCi ?? null,
       points,
       lifetimeEarned,
       lifetimeRedeemed: bal?.lifetimeRedeemed ?? 0,
       discountValue: +(points * redemptionRate).toFixed(2),
       redemptionRate,
       pointsPerUnit: settings?.pointsPerUnit ?? 1,
-      loyaltyEnabled: settings?.loyaltyEnabled ?? false,
+      loyaltyEnabled: settings?.loyaltyEnabled ?? true,
       ...buildTierInfo(tier, lifetimeEarned),
     });
   } catch (err) {
@@ -176,38 +288,69 @@ router.get("/history/:customerId", async (req, res) => {
 // ── GET /api/loyalty/leaderboard ──────────────────────────────────────────────
 router.get("/leaderboard", async (req, res) => {
   try {
+    // Sincronizar automáticamente cualquier venta que aún no tenga puntos acreditados
+    try {
+      await syncCustomerLoyaltyPoints();
+    } catch (syncErr) {
+      req.log.warn({ err: syncErr }, "Auto-sync loyalty points error (non-fatal)");
+    }
+
     const rows = await db
       .select({
-        cp: customerPointsTable,
+        customerId: customersTable.id,
         customerName: customersTable.name,
         customerEmail: customersTable.email,
         customerPhone: customersTable.phone,
         customerNitCi: customersTable.nitCi,
+        points: customerPointsTable.points,
+        lifetimeEarned: customerPointsTable.lifetimeEarned,
+        lifetimeRedeemed: customerPointsTable.lifetimeRedeemed,
+        tier: customerPointsTable.tier,
       })
-      .from(customerPointsTable)
-      .leftJoin(customersTable, eq(customerPointsTable.customerId, customersTable.id))
-      .orderBy(desc(customerPointsTable.points));
+      .from(customersTable)
+      .leftJoin(customerPointsTable, eq(customersTable.id, customerPointsTable.customerId))
+      .orderBy(
+        desc(sql`COALESCE(${customerPointsTable.lifetimeEarned}, 0)`),
+        asc(customersTable.name)
+      );
 
     const settings = await getSettings();
     const redemptionRate = Number(settings?.pointsRedemptionRate ?? 0.01);
 
     res.json(
-      rows.map((r) => ({
-        customerId: r.cp.customerId,
-        customerName: r.customerName ?? "Desconocido",
-        customerEmail: r.customerEmail ?? null,
-        customerPhone: r.customerPhone ?? null,
-        customerNitCi: r.customerNitCi ?? null,
-        points: r.cp.points,
-        lifetimeEarned: r.cp.lifetimeEarned,
-        lifetimeRedeemed: r.cp.lifetimeRedeemed,
-        discountValue: +(r.cp.points * redemptionRate).toFixed(2),
-        ...buildTierInfo(r.cp.tier ?? "bronze", r.cp.lifetimeEarned),
-      }))
+      rows.map((r) => {
+        const points = r.points ?? 0;
+        const lifetimeEarned = r.lifetimeEarned ?? 0;
+        const lifetimeRedeemed = r.lifetimeRedeemed ?? 0;
+        const tier = r.tier ?? "bronze";
+        return {
+          customerId: r.customerId,
+          customerName: r.customerName,
+          customerEmail: r.customerEmail ?? null,
+          customerPhone: r.customerPhone ?? null,
+          customerNitCi: r.customerNitCi ?? null,
+          points,
+          lifetimeEarned,
+          lifetimeRedeemed,
+          discountValue: +(points * redemptionRate).toFixed(2),
+          ...buildTierInfo(tier, lifetimeEarned),
+        };
+      })
     );
   } catch (err) {
     req.log.error({ err }, "GetLeaderboard error");
     res.status(500).json({ message: "Error interno" });
+  }
+});
+
+// ── POST /api/loyalty/sync ────────────────────────────────────────────────────
+router.post("/sync", async (req: AuthRequest, res) => {
+  try {
+    const result = await syncCustomerLoyaltyPoints();
+    res.json({ message: "Puntos sincronizados correctamente", ...result });
+  } catch (err) {
+    req.log.error({ err }, "SyncLoyalty error");
+    res.status(500).json({ message: "Error al sincronizar puntos" });
   }
 });
 
@@ -235,10 +378,6 @@ router.post("/redeem", async (req: AuthRequest, res) => {
 
   try {
     const settings = await getSettings();
-    if (!settings?.loyaltyEnabled) {
-      res.status(400).json({ message: "El sistema de puntos no está habilitado" });
-      return;
-    }
 
     const result = await db.transaction(async (tx) => {
       const bal = await getOrCreateBalance(tx, customerId);
@@ -248,12 +387,18 @@ router.post("/redeem", async (req: AuthRequest, res) => {
 
       const redemptionRate = Number(settings.pointsRedemptionRate ?? 0.01);
       const discountAmount = +(pointsToRedeem * redemptionRate).toFixed(2);
+      const remainingPoints = bal.points - pointsToRedeem;
+
+      // Si el canje deja el balance en 0, el tier se reinicia a bronce y el
+      // progreso histórico se resetea (podrá volver a subir con próximas compras).
+      const fullRedemption = remainingPoints <= 0;
 
       await tx
         .update(customerPointsTable)
         .set({
-          points: bal.points - pointsToRedeem,
+          points: Math.max(0, remainingPoints),
           lifetimeRedeemed: bal.lifetimeRedeemed + pointsToRedeem,
+          ...(fullRedemption ? { tier: "bronze", lifetimeEarned: 0 } : {}),
         })
         .where(eq(customerPointsTable.customerId, customerId));
 
@@ -261,13 +406,24 @@ router.post("/redeem", async (req: AuthRequest, res) => {
         customerId,
         delta: -pointsToRedeem,
         type: "redeemed",
-        notes: `Canje de ${pointsToRedeem} puntos — descuento ${discountAmount}`,
+        notes: fullRedemption
+          ? `Canje de ${pointsToRedeem} puntos — descuento ${discountAmount}. ¡Canje total! Nivel reiniciado a Bronce`
+          : `Canje de ${pointsToRedeem} puntos — descuento ${discountAmount}`,
       });
+
+      if (fullRedemption && bal.tier && bal.tier !== "bronze") {
+        await tx.insert(pointsTransactionsTable).values({
+          customerId,
+          delta: 0,
+          type: "tier_down",
+          notes: `Nivel reiniciado a Bronce: el cliente canjeó todos sus puntos y descuentos`,
+        });
+      }
 
       return {
         pointsRedeemed: pointsToRedeem,
         discountAmount,
-        remainingPoints: bal.points - pointsToRedeem,
+        remainingPoints: Math.max(0, remainingPoints),
       };
     });
 

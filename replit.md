@@ -92,7 +92,7 @@ Implemented full Perfisoft visual redesign:
 
 ## Business Rules
 
-- IVA: 13% (subtotal × 0.13 = iva, total = subtotal + iva)
+- IVA: Sin IVA / 0% (total = subtotal directo, sin impuestos)
 - Sale transaction: validates stock → inserts sale + details → reduces stock (db.transaction)
 - Sale cancel: restores stock atomically
 - Quote convert-to-sale: validates stock, creates sale transaction, marks quote as "convertida"

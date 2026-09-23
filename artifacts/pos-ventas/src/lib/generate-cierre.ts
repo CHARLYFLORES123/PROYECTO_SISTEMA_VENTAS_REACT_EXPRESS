@@ -407,12 +407,8 @@ export function buildCierreHTML(
   <div class="totals-block">
     <div class="totals-inner">
       <div class="tot-row">
-        <span class="lbl">Subtotal (sin IVA):</span>
+        <span class="lbl">Subtotal:</span>
         <span>${sym} ${data.totalSubtotal.toFixed(2)}</span>
-      </div>
-      <div class="tot-row">
-        <span class="lbl">IVA (13%):</span>
-        <span>${sym} ${data.totalIva.toFixed(2)}</span>
       </div>
       <div class="tot-row grand">
         <span>TOTAL:</span>

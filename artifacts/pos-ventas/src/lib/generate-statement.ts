@@ -213,13 +213,12 @@ export async function generateStatementPDF(
     s.paymentMethod,
     STATUS_LABELS[s.status] || s.status,
     fmtMoney(s.subtotal, sym),
-    fmtMoney(s.iva, sym),
     fmtMoney(s.total, sym),
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "N° Venta", "Fecha", "Pago", "Estado", "Subtotal", "IVA", "Total"]],
+    head: [["#", "N° Venta", "Fecha", "Pago", "Estado", "Subtotal", "Total"]],
     body: tableRows,
     margin: { left: 12, right: 12 },
     styles: {
@@ -237,14 +236,13 @@ export async function generateStatementPDF(
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: 7, halign: "center" },
-      1: { cellWidth: 20, halign: "center" },
-      2: { cellWidth: 35 },
-      3: { cellWidth: 25 },
-      4: { cellWidth: 22, halign: "center" },
-      5: { cellWidth: 24, halign: "right" },
-      6: { cellWidth: 20, halign: "right" },
-      7: { cellWidth: 24, halign: "right" },
+      0: { cellWidth: 8, halign: "center" },
+      1: { cellWidth: 22, halign: "center" },
+      2: { cellWidth: 40 },
+      3: { cellWidth: 28 },
+      4: { cellWidth: 24, halign: "center" },
+      5: { cellWidth: 32, halign: "right" },
+      6: { cellWidth: 32, halign: "right" },
     },
     didParseCell: (data) => {
       if (data.section === "body" && data.column.index === 4) {

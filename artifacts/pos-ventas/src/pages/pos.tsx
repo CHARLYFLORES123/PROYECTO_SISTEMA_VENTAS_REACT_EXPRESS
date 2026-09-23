@@ -1,12 +1,15 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { useGetProducts, useGetCustomers, useCreateSale, useGetCategories, useGetPaymentMethods, useGetBusinessSettings } from "@workspace/api-client-react";
+import { useGetProducts, useGetCustomers, useCreateSale, useGetCategories, useGetPaymentMethods, useGetBusinessSettings, useCreateCustomer } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote, Star, Gift, Zap, Ticket, X } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Package, User, UserPlus, CreditCard, CheckCircle2, ScanLine, PauseCircle, PlayCircle, Clock, Percent, Tag, Banknote, Star, Gift, Zap, Ticket, X } from "lucide-react";
 import { TierBadge } from "@/pages/loyalty";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
@@ -15,15 +18,41 @@ import { emailBoleta } from "@/lib/generate-boleta";
 import { Toast, Swal } from "@/lib/swal";
 import { getToken } from "@/lib/auth";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API_URL = (import.meta.env.VITE_API_URL || `${window.location.origin}/api`).replace(/\/$/, "");
 async function apiFetch(path: string, opts: RequestInit = {}) {
-  const res = await fetch(`${BASE}${path}`, {
+  const normalizedPath = path.startsWith("/api/") ? path.slice(4) : path.startsWith("/") ? path : `/${path}`;
+  const res = await fetch(`${API_URL}${normalizedPath}`, {
     ...opts,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}`, ...(opts.headers ?? {}) },
   });
   if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error((d as any).message ?? "Error"); }
   return res.json();
+}
+
+function isCash(m?: string | null) {
+  const lower = (m || "").toLowerCase();
+  return lower === "efectivo" || lower.includes("efectivo");
+}
+
+function ProductThumbnail({ src, alt, className = "w-full h-full object-cover" }: { src?: string | null; alt: string; className?: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (!src || hasError) {
+    return <Package className="w-8 h-8 text-muted-foreground/30" />;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setHasError(true)}
+    />
+  );
 }
 
 interface CartItem {
@@ -50,15 +79,20 @@ interface SuspendedSale {
 interface CompletedSaleForModal {
   id: number;
   customerName?: string | null;
+  customerNitCi?: string | null;
+  customerPhone?: string | null;
   userName?: string | null;
   subtotal: number;
   iva: number;
   total: number;
   paymentMethod: string;
+  amountPaid?: number | null;
+  changeDue?: number | null;
   status: string;
   notes?: string | null;
   createdAt: string;
   details: { id: number; productName: string; quantity: number; unitPrice: number; subtotal: number }[];
+  pointsEarned?: number | null;
 }
 
 export default function POS() {
@@ -97,10 +131,83 @@ export default function POS() {
   const { data: paymentMethods } = useGetPaymentMethods();
   const { data: settings } = useGetBusinessSettings();
   const createSale = useCreateSale();
+  const createCustomer = useCreateCustomer();
+
+  const [registerCustomerOpen, setRegisterCustomerOpen] = useState(false);
+  const [newClientCiNit, setNewClientCiNit] = useState("");
+  const [newClientApellidos, setNewClientApellidos] = useState("");
+  const [newClientNombres, setNewClientNombres] = useState("");
+  const [newClientPhone, setNewClientPhone] = useState("");
+  const [isRegisteringCustomer, setIsRegisteringCustomer] = useState(false);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const openRegisterCustomerModal = (initialNitCi = "") => {
+    setNewClientCiNit(initialNitCi || customerSearch.trim());
+    setNewClientApellidos("");
+    setNewClientNombres("");
+    setNewClientPhone("");
+    setShowCustomerDropdown(false);
+    setRegisterCustomerOpen(true);
+  };
+
+  const handleRegisterCustomer = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const apellidos = newClientApellidos.trim();
+    const nombres = newClientNombres.trim();
+    const fullName = [nombres, apellidos].filter(Boolean).join(" ");
+
+    if (!fullName) {
+      Toast.fire({ icon: "error", title: "Datos incompletos", text: "Ingresa el nombre o apellido del cliente" });
+      return;
+    }
+
+    setIsRegisteringCustomer(true);
+    createCustomer.mutate({
+      data: {
+        name: fullName,
+        nitCi: newClientCiNit.trim() || null,
+        phone: newClientPhone.trim() || null,
+      }
+    }, {
+      onSuccess: (newCust) => {
+        setIsRegisteringCustomer(false);
+        setRegisterCustomerOpen(false);
+        queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+        setCustomerId(String(newCust.id));
+        setCustomerSearch("");
+        Toast.fire({
+          icon: "success",
+          title: "Cliente registrado",
+          text: `${newCust.name} ha sido registrado y seleccionado para esta venta.`
+        });
+      },
+      onError: (err: any) => {
+        setIsRegisteringCustomer(false);
+        Toast.fire({
+          icon: "error",
+          title: "Error al registrar",
+          text: err?.message || "No se pudo registrar al cliente"
+        });
+      }
+    });
+  };
 
   // Loyalty balance for selected customer
   const customerIdNum = customerId !== "none" ? parseInt(customerId) : null;
-  const { data: loyaltyBalance, refetch: refetchBalance } = useQuery<{
+  const { data: loyaltyBalance, refetch: refetchBalance, isLoading: loyaltyLoading } = useQuery<{
     points: number; discountValue: number; redemptionRate: number; pointsPerUnit: number; loyaltyEnabled: boolean;
     tier: string; tierLabel: string; tierMultiplier: number; tierColor: string;
     nextTier: { name: string; label: string; min: number } | null;
@@ -108,7 +215,7 @@ export default function POS() {
   }>({
     queryKey: ["/api/loyalty/balance", customerIdNum],
     queryFn: () => apiFetch(`/api/loyalty/balance/${customerIdNum}`),
-    enabled: customerIdNum !== null && !!(settings as any)?.loyaltyEnabled,
+    enabled: customerIdNum !== null,
   });
 
   // Reset points and coupon when customer changes
@@ -123,11 +230,20 @@ export default function POS() {
     return paymentMethods.filter(m => m.isActive).map(m => m.name);
   }, [paymentMethods]);
 
+  useEffect(() => {
+    if (activePaymentMethods.length > 0 && !activePaymentMethods.includes(paymentMethod)) {
+      setPaymentMethod(activePaymentMethods[0]);
+    }
+  }, [activePaymentMethods, paymentMethod]);
+
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers || [];
-    const q = customerSearch.toLowerCase();
+    if (!customerSearch.trim()) return customers || [];
+    const q = customerSearch.toLowerCase().trim();
     return (customers || []).filter(c =>
-      c.name.toLowerCase().includes(q) || (c as any).email?.toLowerCase().includes(q)
+      c.name.toLowerCase().includes(q) ||
+      (c.nitCi && c.nitCi.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.toLowerCase().includes(q)) ||
+      ((c as any).email && (c as any).email.toLowerCase().includes(q))
     );
   }, [customers, customerSearch]);
 
@@ -142,15 +258,50 @@ export default function POS() {
     acc + i.quantity * i.unitPrice * (i.discount / 100), 0), [cart]);
   const loyaltyDiscount = useMemo(() => {
     if (!pointsToRedeem || !loyaltyBalance) return 0;
-    return +(pointsToRedeem * loyaltyBalance.redemptionRate).toFixed(2);
-  }, [pointsToRedeem, loyaltyBalance]);
+    const calculated = +(pointsToRedeem * loyaltyBalance.redemptionRate).toFixed(2);
+    return Math.min(calculated, subtotal);
+  }, [pointsToRedeem, loyaltyBalance, subtotal]);
+
+  const availableLoyaltyPoints = useMemo(() => {
+    if (!loyaltyBalance) return 0;
+    return Math.max(0, loyaltyBalance.points - pointsToRedeem);
+  }, [loyaltyBalance, pointsToRedeem]);
+
+  const availableLoyaltyDiscount = useMemo(() => {
+    if (!loyaltyBalance) return 0;
+    return Math.max(0, +(availableLoyaltyPoints * loyaltyBalance.redemptionRate).toFixed(2));
+  }, [loyaltyBalance, availableLoyaltyPoints]);
   const couponDiscount = useMemo(() => {
     if (!validatedCoupon) return 0;
     const base = subtotal - loyaltyDiscount;
     return +(base * validatedCoupon.discountPercent / 100).toFixed(2);
   }, [validatedCoupon, subtotal, loyaltyDiscount]);
-  const iva = (subtotal - loyaltyDiscount - couponDiscount) * 0.13;
-  const total = Math.max(0, subtotal - loyaltyDiscount - couponDiscount + iva);
+  const netSubtotal = Math.max(0, subtotal - loyaltyDiscount - couponDiscount);
+  const iva = 0;
+  const total = Math.max(0, +netSubtotal.toFixed(2));
+
+  const handleRedeemCustomerDiscount = () => {
+    if (!loyaltyBalance || loyaltyBalance.points <= 0) {
+      Toast.fire({ icon: "info", title: "Sin puntos", text: "El cliente no tiene puntos acumulados para canjear." });
+      return;
+    }
+    if (cart.length === 0) {
+      Toast.fire({ icon: "warning", title: "Carrito vacío", text: "Agrega productos a la venta para aplicar el descuento del cliente." });
+      return;
+    }
+
+    const rate = loyaltyBalance.redemptionRate || 0.01;
+    const maxPointsNeeded = Math.ceil(subtotal / rate);
+    const pointsToApply = Math.min(loyaltyBalance.points, maxPointsNeeded);
+    const discountAmount = Math.min(+(pointsToApply * rate).toFixed(2), subtotal);
+
+    setPointsToRedeem(pointsToApply);
+    Toast.fire({
+      icon: "success",
+      title: "Descuento aplicado",
+      text: `Se ha descontado ${formatCurrency(discountAmount, currencySymbol)} (${pointsToApply} puntos) del total a pagar.`
+    });
+  };
 
   const addToCart = (product: any, qty = 1) => {
     setCart(prev => {
@@ -346,6 +497,7 @@ export default function POS() {
     if (cart.length === 0) return;
     const cartSnapshot = [...cart];
     const customerIdSnapshot = customerId;
+    const selectedCustomerSnapshot = selectedCustomer;
     const paymentMethodSnapshot = paymentMethod;
     const loyaltyDiscountSnapshot = loyaltyDiscount;
     const pointsToRedeemSnapshot = pointsToRedeem;
@@ -377,26 +529,52 @@ export default function POS() {
     ].filter(Boolean);
     const notesWithPoints = notesParts.length > 0 ? notesParts.join(" | ") : null;
 
+    const totalDiscountToApply = +(loyaltyDiscountSnapshot + couponDiscountSnapshot).toFixed(2);
+
+    const parsedCashReceived = isCash(paymentMethodSnapshot)
+      ? (cashReceivedSnapshot ? parseFloat(cashReceivedSnapshot) : total)
+      : null;
+    const computedChange = parsedCashReceived !== null && parsedCashReceived >= total
+      ? +(parsedCashReceived - total).toFixed(2)
+      : (isCash(paymentMethodSnapshot) ? 0 : null);
+
     createSale.mutate({
       data: {
         customerId: customerIdSnapshot === "none" ? null : parseInt(customerIdSnapshot),
         paymentMethod: paymentMethodSnapshot,
+        amountPaid: parsedCashReceived,
+        changeDue: computedChange,
         notes: notesWithPoints,
-        items: cartSnapshot.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
-      },
+        discount: totalDiscountToApply,
+        items: cartSnapshot.map(i => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: +(i.unitPrice * (1 - (i.discount || 0) / 100)).toFixed(2),
+        })),
+      } as any,
     }, {
       onSuccess: async (sale) => {
+        const earned = (sale as any).pointsEarned ?? (
+          selectedCustomerSnapshot && (sale as any).pointsEarned !== 0
+            ? Math.round(sale.total * Number(settings?.pointsPerUnit ?? 1))
+            : 0
+        );
         const saleForModal: CompletedSaleForModal = {
           id: sale.id,
-          customerName: selectedCustomer?.name ?? null,
+          customerName: selectedCustomerSnapshot?.name ?? (sale as any).customerName ?? null,
+          customerNitCi: selectedCustomerSnapshot?.nitCi ?? (sale as any).customerNitCi ?? null,
+          customerPhone: selectedCustomerSnapshot?.phone ?? (sale as any).customerPhone ?? null,
           userName: null,
           subtotal: sale.subtotal,
           iva: sale.iva,
           total: sale.total,
           paymentMethod: sale.paymentMethod,
+          amountPaid: sale.amountPaid !== undefined && sale.amountPaid !== null ? Number(sale.amountPaid) : parsedCashReceived,
+          changeDue: sale.changeDue !== undefined && sale.changeDue !== null ? Number(sale.changeDue) : computedChange,
           status: sale.status,
           notes: notesWithPoints,
           createdAt: sale.createdAt,
+          pointsEarned: earned,
           details: cartSnapshot.map((item, idx) => ({
             id: idx + 1,
             productName: item.productName,
@@ -406,7 +584,12 @@ export default function POS() {
           })),
         };
         setCompletedSale(saleForModal);
-        if (selectedCustomer?.email && settings) {
+        // Abrir el cajón de dinero (conectado a la impresora térmica) al confirmar la venta.
+        apiFetch("/api/hardware/open-drawer", {
+          method: "POST",
+          body: JSON.stringify({ paymentMethod: paymentMethodSnapshot }),
+        }).catch(() => {});
+        if (selectedCustomerSnapshot?.email && settings) {
           emailBoleta(saleForModal, settings, API_URL, getToken())
             .then(() => Toast.fire({ icon: "success", title: "Boleta enviada al correo del cliente" }))
             .catch((err: Error) => Toast.fire({ icon: "warning", title: "Venta registrada", text: err.message }));
@@ -426,7 +609,7 @@ export default function POS() {
         setPointsToRedeem(0);
         setValidatedCoupon(null);
         setCouponInput("");
-        if (paymentMethodSnapshot === "Efectivo" && cashReceivedSnapshot) {
+        if (isCash(paymentMethodSnapshot) && cashReceivedSnapshot) {
           const change = parseFloat(cashReceivedSnapshot) - sale.total;
           if (change > 0) {
             Toast.fire({ icon: "success", title: "Cambio a entregar", text: formatCurrency(change, currencySymbol), timer: 4000 });
@@ -435,14 +618,20 @@ export default function POS() {
         // Show loyalty earned notification
         if ((sale as any).pointsEarned > 0) {
           Toast.fire({ icon: "success", title: `+${(sale as any).pointsEarned} puntos acumulados`, timer: 3000 });
+        } else if (pointsToRedeemSnapshot > 0 && customerIdSnapshot !== "none") {
+          Toast.fire({
+            icon: "info",
+            title: "Puntos en cero",
+            text: "El cliente canjeó todos sus descuentos: nivel reiniciado a Bronce. En su próxima compra sin canje volverá a acumular puntos.",
+            timer: 4000,
+          });
         }
         if (couponSnapshot) {
           Toast.fire({ icon: "success", title: `Cupón ${couponSnapshot.code} canjeado`, text: `-${couponSnapshot.discountPercent}%`, timer: 3000 });
         }
         queryClient.invalidateQueries({ queryKey: ["/api/products"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/loyalty/balance", parseInt(customerIdSnapshot)] });
-        queryClient.invalidateQueries({ queryKey: ["/api/loyalty/leaderboard"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/loyalty"] });
       },
       onError: (err: any) => {
         Swal.fire({ icon: "error", title: "Error al procesar venta", text: err.message, confirmButtonColor: "#4F46E5" });
@@ -568,11 +757,7 @@ export default function POS() {
                   >
                     {/* Image */}
                     <div className="h-28 bg-muted/50 flex items-center justify-center overflow-hidden border-b border-border/50">
-                      {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" onError={e => (e.currentTarget.parentElement!.innerHTML = '<div class="flex items-center justify-center w-full h-full text-muted-foreground/30"><svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\'><rect width=\'18\' height=\'18\' x=\'3\' y=\'3\' rx=\'2\'/><circle cx=\'9\' cy=\'9\' r=\'2\'/><path d=\'m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\'/></svg></div>')} />
-                      ) : (
-                        <Package className="w-8 h-8 text-muted-foreground/30" />
-                      )}
+                      <ProductThumbnail src={product.imageUrl} alt={product.name} />
                     </div>
                     <CardContent className="p-3">
                       <p className="font-semibold text-sm leading-tight line-clamp-1">{product.name}</p>
@@ -765,157 +950,359 @@ export default function POS() {
         <div className="border-t border-border p-4 space-y-3">
           {/* Customer selector */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" /> Cliente
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5" /> Cliente
+              </label>
+              {!selectedCustomer && (
+                <button
+                  type="button"
+                  onClick={() => openRegisterCustomerModal(customerSearch)}
+                  className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1"
+                >
+                  <UserPlus className="w-3 h-3" /> Registrar cliente
+                </button>
+              )}
+            </div>
             {selectedCustomer ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 p-2.5 rounded-xl bg-primary/5 border border-primary/20">
-                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
                     {selectedCustomer.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold truncate">{selectedCustomer.name}</p>
-                    {loyaltyBalance?.loyaltyEnabled ? (
-                      <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-xs font-semibold truncate text-foreground">{selectedCustomer.name}</p>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[10px] text-muted-foreground">
+                      {selectedCustomer.nitCi ? (
+                        <span className="font-mono bg-primary/10 text-primary px-1.5 py-0.2 rounded font-semibold">
+                          CI/NIT: {selectedCustomer.nitCi}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/70">Sin CI/NIT</span>
+                      )}
+                      {selectedCustomer.phone && <span>· Tel: {selectedCustomer.phone}</span>}
+                    </div>
+                    {loyaltyBalance ? (
+                      <div className="flex items-center gap-1.5 mt-1">
                         <TierBadge tier={loyaltyBalance.tier} size="xs" />
                         <p className="text-[10px] text-amber-600 font-semibold flex items-center gap-0.5">
-                          <Star className="w-2.5 h-2.5" /> {loyaltyBalance.points.toLocaleString("es")} pts
+                          <Star className="w-2.5 h-2.5" /> {availableLoyaltyPoints.toLocaleString("es")} pts
+                          {pointsToRedeem > 0 && (
+                            <span className="text-[9px] text-emerald-700 font-medium ml-1">({pointsToRedeem.toLocaleString("es")} canjeados)</span>
+                          )}
                         </p>
-                        {loyaltyBalance.tierMultiplier > 1 && (
-                          <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
-                            <Zap className="w-2.5 h-2.5 text-yellow-500" />×{loyaltyBalance.tierMultiplier}
-                          </span>
-                        )}
                       </div>
-                    ) : (
-                      <p className="text-[10px] text-muted-foreground truncate">{(selectedCustomer as any).email || ""}</p>
-                    )}
+                    ) : null}
                   </div>
                   <button
-                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    type="button"
+                    title="Quitar cliente / Seleccionar otro"
+                    className="text-muted-foreground hover:text-destructive p-1 rounded-lg hover:bg-destructive/10 transition-colors"
                     onClick={() => { setCustomerId("none"); setCustomerSearch(""); }}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                {/* Coupon panel */}
-                {cart.length > 0 && (
-                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-2.5 space-y-2">
-                    <p className="text-[11px] font-semibold text-violet-800 flex items-center gap-1">
-                      <Ticket className="w-3 h-3" /> Cupón de descuento
-                    </p>
-                    {validatedCoupon ? (
-                      <div className="rounded-lg border border-violet-300 bg-white px-2.5 py-2 flex items-center gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-violet-800">{validatedCoupon.code}</p>
-                          <p className="text-[10px] text-violet-600">
-                            -{validatedCoupon.discountPercent}% · {validatedCoupon.customerName} · -{formatCurrency(couponDiscount, currencySymbol)}
-                          </p>
+                {/* Loyalty & Discount Panel */}
+                {loyaltyLoading ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>Consultando puntos del cliente...</span>
+                  </div>
+                ) : loyaltyBalance ? (
+                  <div className="rounded-xl border border-amber-300 bg-gradient-to-br from-amber-50/90 via-amber-50/40 to-yellow-50/60 p-3 space-y-2.5 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-5 h-5 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-700 shrink-0">
+                          <Star className="w-3 h-3 fill-amber-500 text-amber-600" />
                         </div>
-                        <button onClick={() => { setValidatedCoupon(null); setCouponInput(""); }}
-                          className="text-violet-400 hover:text-violet-700 shrink-0">
-                          <X className="w-3.5 h-3.5" />
+                        <span className="text-xs font-bold text-amber-950">Puntos y Descuento del Cliente</span>
+                      </div>
+                      <TierBadge tier={loyaltyBalance.tier} size="xs" />
+                    </div>
+
+                    {/* Available Points and Available Discount Grid */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className={`rounded-lg p-2 border shadow-2xs text-center transition-all ${
+                        pointsToRedeem > 0 && availableLoyaltyPoints === 0
+                          ? "bg-amber-50/70 border-amber-300"
+                          : "bg-white/95 border-amber-200/80"
+                      }`}>
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
+                          Puntos Disponibles
+                        </span>
+                        <div className="flex items-center justify-center gap-1 mt-0.5">
+                          <Star className={`w-3.5 h-3.5 shrink-0 ${availableLoyaltyPoints > 0 ? "text-amber-500 fill-amber-400" : "text-slate-400"}`} />
+                          <span className={`text-sm font-bold ${availableLoyaltyPoints > 0 ? "text-amber-800" : "text-slate-600"}`}>
+                            {availableLoyaltyPoints.toLocaleString("es")}
+                          </span>
+                          <span className="text-[10px] text-amber-700 font-medium">pts</span>
+                        </div>
+                        {pointsToRedeem > 0 ? (
+                          <span className="text-[9px] text-emerald-700 font-medium block mt-0.5">
+                            (-{pointsToRedeem.toLocaleString("es")} canjeados)
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className={`rounded-lg p-2 border shadow-2xs text-center transition-all ${
+                        pointsToRedeem > 0 && availableLoyaltyDiscount === 0
+                          ? "bg-emerald-50/70 border-emerald-300"
+                          : "bg-white/95 border-emerald-200/80"
+                      }`}>
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
+                          Desc. Disponible
+                        </span>
+                        <div className="flex items-center justify-center gap-1 mt-0.5">
+                          <Gift className={`w-3.5 h-3.5 shrink-0 ${availableLoyaltyDiscount > 0 ? "text-emerald-600" : "text-slate-400"}`} />
+                          <span className={`text-sm font-bold ${availableLoyaltyDiscount > 0 ? "text-emerald-700" : "text-slate-600"}`}>
+                            {formatCurrency(availableLoyaltyDiscount, currencySymbol)}
+                          </span>
+                        </div>
+                        {pointsToRedeem > 0 ? (
+                          <span className="text-[9px] text-emerald-700 font-medium block mt-0.5">
+                            (-{formatCurrency(loyaltyDiscount, currencySymbol)} canjeado)
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-emerald-600 block mt-0.5">
+                            Tasa: {formatCurrency(loyaltyBalance.redemptionRate, currencySymbol)} / pt
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Botón Principal: Canjear Descuento del Total a Pagar */}
+                    {pointsToRedeem > 0 ? (
+                      <div className="rounded-lg bg-emerald-100/90 border border-emerald-300 p-2 flex items-center justify-between gap-2 shadow-2xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-emerald-900 leading-tight">
+                              Descuento canjeado: -{formatCurrency(loyaltyDiscount, currencySymbol)}
+                            </p>
+                            <p className="text-[10px] text-emerald-700">
+                              Se descontaron {pointsToRedeem.toLocaleString("es")} puntos del total a pagar · Disponibles: {availableLoyaltyPoints.toLocaleString("es")} pts
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPointsToRedeem(0);
+                            Toast.fire({ icon: "info", title: "Descuento cancelado", text: "Se restauró el total a pagar sin descuento." });
+                          }}
+                          className="px-2 py-1 rounded bg-white hover:bg-destructive/10 text-destructive text-[10px] font-bold border border-destructive/20 transition-colors shrink-0"
+                        >
+                          Quitar canje
                         </button>
                       </div>
                     ) : (
-                      <div className="flex gap-1.5">
-                        <Input
-                          value={couponInput}
-                          onChange={e => setCouponInput(e.target.value.toUpperCase())}
-                          onKeyDown={e => { if (e.key === "Enter") {
-                            e.preventDefault();
-                            setCouponValidating(true);
-                            apiFetch("/api/coupons/validate", { method: "POST", body: JSON.stringify({ code: couponInput }) })
-                              .then(d => setValidatedCoupon(d))
-                              .catch(err => Toast.fire({ icon: "error", title: err.message }))
-                              .finally(() => setCouponValidating(false));
-                          }}}
-                          placeholder="GOLD-XXXXXX"
-                          className="h-7 text-xs rounded-lg flex-1 font-mono tracking-widest"
-                        />
-                        <button
-                          disabled={!couponInput || couponValidating}
-                          onClick={() => {
-                            setCouponValidating(true);
-                            apiFetch("/api/coupons/validate", { method: "POST", body: JSON.stringify({ code: couponInput }) })
-                              .then(d => setValidatedCoupon(d))
-                              .catch(err => Toast.fire({ icon: "error", title: err.message }))
-                              .finally(() => setCouponValidating(false));
-                          }}
-                          className="h-7 px-3 text-[10px] font-semibold rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors shrink-0"
-                        >
-                          {couponValidating ? "..." : "Aplicar"}
-                        </button>
+                      <button
+                        type="button"
+                        disabled={loyaltyBalance.points <= 0 || cart.length === 0}
+                        onClick={handleRedeemCustomerDiscount}
+                        className="w-full h-9 rounded-lg bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer"
+                      >
+                        <Gift className="w-3.5 h-3.5" />
+                        {loyaltyBalance.points <= 0
+                          ? "Sin puntos disponibles para canjear"
+                          : cart.length === 0
+                          ? `Canjear Descuento (${formatCurrency(loyaltyBalance.discountValue, currencySymbol)}) - Agrega productos`
+                          : `Canjear Descuento (${formatCurrency(Math.min(loyaltyBalance.discountValue, subtotal), currencySymbol)}) del Total a Pagar`}
+                      </button>
+                    )}
+
+                    {/* Quick partial redemption options */}
+                    {loyaltyBalance.points > 0 && cart.length > 0 && (
+                      <div className="pt-1 border-t border-amber-200/60 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] text-amber-900 font-medium">
+                          <span>Opciones de canje parcial:</span>
+                          {pointsToRedeem > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setPointsToRedeem(0)}
+                              className="text-amber-700 hover:underline"
+                            >
+                              Restablecer
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {[100, 200, 500].filter(v => v <= loyaltyBalance.points).map(pts => {
+                            const disc = +(pts * loyaltyBalance.redemptionRate).toFixed(2);
+                            const isSelected = pointsToRedeem === pts;
+                            return (
+                              <button
+                                key={pts}
+                                type="button"
+                                onClick={() => setPointsToRedeem(isSelected ? 0 : pts)}
+                                className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all flex-1 ${
+                                  isSelected
+                                    ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                                    : "bg-white text-amber-800 border-amber-300 hover:bg-amber-100/70"
+                                }`}
+                              >
+                                {pts} pts<br /><span className={`text-[9px] font-normal ${isSelected ? "text-white/90" : "text-amber-700"}`}>-{formatCurrency(disc, currencySymbol)}</span>
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rate = Number(loyaltyBalance.redemptionRate || 0.01);
+                              const maxPointsNeeded = Math.ceil(subtotal / rate);
+                              const ptsToUse = Math.min(loyaltyBalance.points, maxPointsNeeded);
+                              setPointsToRedeem(pointsToRedeem === ptsToUse ? 0 : ptsToUse);
+                            }}
+                            className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all flex-1 ${
+                              pointsToRedeem > 0 && pointsToRedeem === Math.min(loyaltyBalance.points, Math.ceil(subtotal / (Number(loyaltyBalance.redemptionRate) || 0.01)))
+                                ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                                : "bg-white text-amber-800 border-amber-300 hover:bg-amber-100/70"
+                            }`}
+                          >
+                            Todo<br />
+                            <span className="text-[9px] font-normal">
+                              -{formatCurrency(Math.min(loyaltyBalance.discountValue, subtotal), currencySymbol)}
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
-                )}
+                ) : null}
 
-                {/* Loyalty redemption panel */}
-                {loyaltyBalance?.loyaltyEnabled && loyaltyBalance.points > 0 && cart.length > 0 && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] font-semibold text-amber-800 flex items-center gap-1">
-                        <Gift className="w-3 h-3" /> Canjear puntos
-                      </p>
-                      {pointsToRedeem > 0 && (
-                        <button onClick={() => setPointsToRedeem(0)} className="text-[10px] text-amber-600 hover:text-amber-800 underline">
-                          Quitar
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {[100, 200, 500].filter(v => v <= loyaltyBalance.points).map(pts => {
-                        const disc = +(pts * loyaltyBalance.redemptionRate).toFixed(2);
-                        return (
+              </div>
+            ) : (
+              <div className="space-y-1.5 relative" ref={customerDropdownRef}>
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <Input
+                      value={customerSearch}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value);
+                        setShowCustomerDropdown(true);
+                      }}
+                      onFocus={() => setShowCustomerDropdown(true)}
+                      placeholder="Buscar por CI/NIT o nombre..."
+                      className="pl-8 pr-7 h-9 text-xs rounded-xl"
+                    />
+                    {customerSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerSearch("");
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openRegisterCustomerModal(customerSearch)}
+                    className="h-9 px-2.5 text-xs rounded-xl gap-1 shrink-0 border-primary/30 text-primary hover:bg-primary/10 font-medium"
+                    title="Registrar nuevo cliente"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Nuevo</span>
+                  </Button>
+                </div>
+
+                {/* Dropdown panel */}
+                {showCustomerDropdown && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-popover text-popover-foreground rounded-xl border border-border shadow-2xl z-50 overflow-hidden divide-y divide-border">
+                    <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
+                      {/* Option: Consumidor Final */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerId("none");
+                          setShowCustomerDropdown(false);
+                          setCustomerSearch("");
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between hover:bg-accent transition-colors ${
+                          customerId === "none" ? "bg-accent/60 font-semibold" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px] text-muted-foreground font-bold">
+                            CF
+                          </div>
+                          <span>Consumidor Final</span>
+                        </div>
+                        {customerId === "none" && <CheckCircle2 className="w-3.5 h-3.5 text-primary" />}
+                      </button>
+
+                      {/* Filtered customer list */}
+                      {filteredCustomers.length > 0 ? (
+                        filteredCustomers.map((c) => (
                           <button
-                            key={pts}
-                            onClick={() => setPointsToRedeem(pointsToRedeem === pts ? 0 : pts)}
-                            className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all flex-1 ${
-                              pointsToRedeem === pts
-                                ? "bg-amber-500 text-white border-amber-500"
-                                : "bg-white text-amber-700 border-amber-300 hover:bg-amber-100"
-                            }`}
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setCustomerId(c.id.toString());
+                              setShowCustomerDropdown(false);
+                              setCustomerSearch("");
+                            }}
+                            className="w-full text-left px-2.5 py-2 rounded-lg text-xs hover:bg-accent transition-colors group flex items-start justify-between gap-2"
                           >
-                            {pts}pts<br /><span className="text-[9px] font-normal">-{formatCurrency(disc, currencySymbol)}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold truncate text-foreground group-hover:text-primary">
+                                {c.name}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
+                                {c.nitCi ? (
+                                  <span className="font-mono bg-muted px-1.5 py-0.2 rounded font-medium text-foreground">
+                                    CI/NIT: {c.nitCi}
+                                  </span>
+                                ) : (
+                                  <span>Sin CI/NIT</span>
+                                )}
+                                {c.phone && <span>· Tel: {c.phone}</span>}
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-primary opacity-0 group-hover:opacity-100 font-medium shrink-0 pt-0.5">
+                              Seleccionar
+                            </span>
                           </button>
-                        );
-                      })}
-                      {loyaltyBalance.points >= 1000 && (
-                        <button
-                          onClick={() => setPointsToRedeem(pointsToRedeem === loyaltyBalance.points ? 0 : loyaltyBalance.points)}
-                          className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all flex-1 ${
-                            pointsToRedeem === loyaltyBalance.points
-                              ? "bg-amber-500 text-white border-amber-500"
-                              : "bg-white text-amber-700 border-amber-300 hover:bg-amber-100"
-                          }`}
-                        >
-                          Todo<br /><span className="text-[9px] font-normal">-{formatCurrency(loyaltyBalance.discountValue, currencySymbol)}</span>
-                        </button>
+                        ))
+                      ) : (
+                        <div className="p-3 text-center space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            No se encontró cliente con CI/NIT o nombre: <strong className="text-foreground">"{customerSearch}"</strong>
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => openRegisterCustomerModal(customerSearch)}
+                            className="w-full text-xs rounded-lg gap-1.5 h-8 font-semibold shadow-sm"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" /> Registrar "{customerSearch}" como cliente
+                          </Button>
+                        </div>
                       )}
                     </div>
-                    {pointsToRedeem > 0 && (
-                      <p className="text-[11px] font-semibold text-amber-800 text-center bg-amber-100 rounded-lg py-1">
-                        Descuento: -{formatCurrency(loyaltyDiscount, currencySymbol)} ({pointsToRedeem} pts)
-                      </p>
+
+                    {/* Footer: always offer Registrar cliente if results exist */}
+                    {filteredCustomers.length > 0 && (
+                      <div className="p-1 bg-muted/20">
+                        <button
+                          type="button"
+                          onClick={() => openRegisterCustomerModal(customerSearch)}
+                          className="w-full py-1.5 px-2.5 text-xs text-primary font-semibold hover:bg-primary/10 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" /> + Registrar cliente nuevo
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
               </div>
-            ) : (
-              <Select value={customerId} onValueChange={setCustomerId}>
-                <SelectTrigger className="h-9 text-xs rounded-xl">
-                  <SelectValue placeholder="Consumidor Final" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Consumidor Final</SelectItem>
-                  {customers?.map(c => (
-                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             )}
           </div>
 
@@ -937,15 +1324,20 @@ export default function POS() {
           </div>
 
           {/* Cash received calculator — only for Efectivo */}
-          {paymentMethod === "Efectivo" && (
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <Banknote className="w-3.5 h-3.5" /> Efectivo recibido
-              </label>
+          {isCash(paymentMethod) && (
+            <div className="space-y-2 p-3 bg-primary/5 rounded-2xl border border-primary/20">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-primary uppercase tracking-wide flex items-center gap-1.5">
+                  <Banknote className="w-4 h-4 text-primary" /> Cobro en Efectivo
+                </label>
+                <span className="text-[10px] font-medium text-muted-foreground">
+                  Total: <strong className="text-foreground">{formatCurrency(total, currencySymbol)}</strong>
+                </span>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {total > 0 && (() => {
                   const ceil5 = Math.ceil(total / 5) * 5;
-                  return [...new Set([ceil5, ceil5 + 5, ceil5 + 10, ceil5 + 20, ceil5 + 50])]
+                  return [...new Set([ceil5, ceil5 + 5, ceil5 + 10, ceil5 + 20, ceil5 + 50, ceil5 + 100])]
                     .filter(v => v >= total)
                     .slice(0, 5)
                     .map(amount => (
@@ -953,53 +1345,58 @@ export default function POS() {
                         key={amount}
                         type="button"
                         onClick={() => setCashReceived(amount.toFixed(2))}
-                        className="text-[10px] font-semibold px-2.5 py-1 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+                        className="text-[10px] font-semibold px-2.5 py-1 rounded-lg border border-primary/30 text-primary hover:bg-primary hover:text-white transition-colors"
                       >
                         {formatCurrency(amount, currencySymbol)}
                       </button>
                     ));
                 })()}
               </div>
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
-                placeholder={total > 0 ? `Mín. ${formatCurrency(total, currencySymbol)}` : "0.00"}
-                value={cashReceived}
-                onChange={e => setCashReceived(e.target.value)}
-                className="h-9 text-sm rounded-xl"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                  {currencySymbol}
+                </span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  placeholder={total > 0 ? `Ingresa monto recibido (mín. ${formatCurrency(total, currencySymbol)})` : "0.00"}
+                  value={cashReceived}
+                  onChange={e => setCashReceived(e.target.value)}
+                  className="pl-8 h-10 text-sm font-semibold rounded-xl bg-white"
+                />
+              </div>
               {cashReceived !== "" && (
-                <div className={`flex justify-between items-center px-3 py-2 rounded-xl ${
-                  parseFloat(cashReceived) >= total
-                    ? "bg-green-50 border border-green-200"
-                    : "bg-red-50 border border-red-200"
-                }`}>
-                  <span className={`text-xs font-medium ${parseFloat(cashReceived) >= total ? "text-green-700" : "text-red-600"}`}>
-                    {parseFloat(cashReceived) >= total ? "Cambio" : "Faltan"}
-                  </span>
-                  <span className={`text-base font-bold ${parseFloat(cashReceived) >= total ? "text-green-700" : "text-red-600"}`}>
-                    {parseFloat(cashReceived) >= total
-                      ? formatCurrency(parseFloat(cashReceived) - total, currencySymbol)
-                      : formatCurrency(total - parseFloat(cashReceived), currencySymbol)
-                    }
-                  </span>
+                <div className="space-y-1.5 pt-1">
+                  <div className={`p-2.5 rounded-xl border flex flex-col gap-1.5 ${
+                    parseFloat(cashReceived) >= total
+                      ? "bg-emerald-50/80 border-emerald-300 text-emerald-950"
+                      : "bg-red-50 border-red-200 text-red-900"
+                  }`}>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">Monto recibido:</span>
+                      <span className="font-semibold">{formatCurrency(parseFloat(cashReceived) || 0, currencySymbol)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">Total a pagar:</span>
+                      <span className="font-semibold">{formatCurrency(total, currencySymbol)}</span>
+                    </div>
+                    <div className="border-t border-current/10 pt-1.5 flex justify-between items-center">
+                      <span className="text-xs font-bold uppercase tracking-wider">
+                        {parseFloat(cashReceived) >= total ? "Monto a devolver (Cambio):" : "Falta por pagar:"}
+                      </span>
+                      <span className="text-base font-extrabold">
+                        {parseFloat(cashReceived) >= total
+                          ? formatCurrency(parseFloat(cashReceived) - total, currencySymbol)
+                          : formatCurrency(total - parseFloat(cashReceived), currencySymbol)
+                        }
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
           )}
-
-          {/* Notes */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Nota Adicional</label>
-            <Textarea
-              placeholder="Notas opcionales..."
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={2}
-              className="text-xs resize-none rounded-xl"
-            />
-          </div>
 
           {/* Totals */}
           <div className="pt-2 border-t border-border/60 space-y-1.5">
@@ -1026,12 +1423,8 @@ export default function POS() {
               </div>
             )}
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Subtotal neto</span>
+              <span>Subtotal</span>
               <span className="font-medium text-foreground">{formatCurrency(subtotal - loyaltyDiscount - couponDiscount, currencySymbol)}</span>
-            </div>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>IVA (13%)</span>
-              <span className="font-medium text-foreground">{formatCurrency(iva, currencySymbol)}</span>
             </div>
             <div className="flex justify-between items-center pt-1.5 border-t border-border/60">
               <span className="font-bold text-sm">TOTAL</span>
@@ -1042,7 +1435,7 @@ export default function POS() {
           {/* Pay button — Perfisoft pill style */}
           <button
             onClick={processSale}
-            disabled={cart.length === 0 || createSale.isPending || (paymentMethod === "Efectivo" && cashReceived !== "" && parseFloat(cashReceived) < total)}
+            disabled={cart.length === 0 || createSale.isPending || (isCash(paymentMethod) && cashReceived !== "" && parseFloat(cashReceived) < total)}
             className="w-full h-12 bg-primary text-white font-bold text-sm rounded-full hover:bg-primary/90 active:scale-[0.98] transition-all shadow-md shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {createSale.isPending ? (
@@ -1065,6 +1458,109 @@ export default function POS() {
         sale={completedSale}
         onClose={() => setCompletedSale(null)}
       />
+
+      {/* Modal Registrar Nuevo Cliente */}
+      <Dialog open={registerCustomerOpen} onOpenChange={setRegisterCustomerOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden border-0 shadow-2xl">
+          <div className="bg-primary px-6 pt-6 pb-4 text-primary-foreground">
+            <DialogHeader className="text-left space-y-1">
+              <DialogTitle className="text-lg font-bold flex items-center gap-2 text-white">
+                <UserPlus className="w-5 h-5 text-white" />
+                Registrar Nuevo Cliente
+              </DialogTitle>
+              <DialogDescription className="text-white/80 text-xs">
+                Ingresa los datos del cliente para registrarlo y seleccionarlo automáticamente en la venta actual.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <form onSubmit={handleRegisterCustomer} className="p-6 space-y-4 bg-background">
+            
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Teléfono / Celular
+              </label>
+              <Input
+                value={newClientPhone}
+                onChange={(e) => setNewClientPhone(e.target.value)}
+                placeholder="Ej. 70123456"
+                className="h-9 text-xs rounded-xl"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Apellido(s) <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  value={newClientApellidos}
+                  onChange={(e) => setNewClientApellidos(e.target.value)}
+                  placeholder="Ej. Pérez Flores"
+                  className="h-9 text-xs rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Nombre(s) <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  value={newClientNombres}
+                  onChange={(e) => setNewClientNombres(e.target.value)}
+                  placeholder="Ej. Juan Carlos"
+                  className="h-9 text-xs rounded-xl"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                CI o NIT <span className="text-primary text-[11px] font-normal">(Identificación tributaria o cédula)</span>
+              </label>
+              <Input
+                value={newClientCiNit}
+                onChange={(e) => setNewClientCiNit(e.target.value)}
+                placeholder="Ej. 8492019"
+                className="h-9 text-xs rounded-xl"
+                autoFocus
+              />
+            </div>
+
+            
+
+            <DialogFooter className="pt-2 flex gap-2 sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRegisterCustomerOpen(false)}
+                className="rounded-full text-xs h-9 px-4"
+                disabled={isRegisteringCustomer}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isRegisteringCustomer}
+                className="rounded-full text-xs h-9 px-5 gap-1.5 font-semibold"
+              >
+                {isRegisteringCustomer ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Registrando...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-3.5 h-3.5" />
+                    Registrar y Seleccionar
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

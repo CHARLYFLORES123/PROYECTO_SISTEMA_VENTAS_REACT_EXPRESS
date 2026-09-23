@@ -33,9 +33,24 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         <div className="min-h-screen flex items-center justify-center p-4 bg-slate-100">
           <div className="max-w-md w-full bg-white p-6 rounded-2xl shadow-xl border border-slate-200 text-center">
             <h2 className="text-xl font-bold text-slate-800 mb-2">Se produjo una incidencia</h2>
-            <p className="text-sm text-slate-600 mb-4">
+            <p className="text-sm text-slate-600 mb-3">
               La vista encontró un detalle inesperado (posiblemente por una extensión del navegador o traducción).
             </p>
+            {this.state.error && (
+              <details className="text-left mb-4 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-mono overflow-auto max-h-48">
+                <summary className="cursor-pointer font-semibold text-slate-800 select-none">
+                  Ver detalle técnico del error
+                </summary>
+                <div className="mt-2 text-destructive font-bold break-words whitespace-pre-wrap">
+                  {this.state.error.name}: {this.state.error.message}
+                </div>
+                {this.state.error.stack && (
+                  <pre className="mt-1 text-[10px] text-slate-500 overflow-x-auto whitespace-pre-wrap">
+                    {this.state.error.stack}
+                  </pre>
+                )}
+              </details>
+            )}
             <button
               onClick={() => {
                 this.setState({ hasError: false });

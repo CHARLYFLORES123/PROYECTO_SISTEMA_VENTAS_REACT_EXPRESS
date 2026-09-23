@@ -7,7 +7,7 @@ import { brandsTable } from "./brands";
 export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 300 }).notNull(),
-  barcode: varchar("barcode", { length: 100 }).unique(),
+  barcode: varchar("barcode", { length: 100 }),
   description: text("description"),
   purchasePrice: numeric("purchase_price", { precision: 12, scale: 2 }).notNull().default("0"),
   salePrice: numeric("sale_price", { precision: 12, scale: 2 }).notNull().default("0"),

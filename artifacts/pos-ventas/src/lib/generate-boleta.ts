@@ -12,15 +12,20 @@ interface SaleDetail {
 interface SaleForBoleta {
   id: number;
   customerName?: string | null;
+  customerNitCi?: string | null;
+  customerPhone?: string | null;
   userName?: string | null;
   subtotal: number;
   iva: number;
   total: number;
   paymentMethod: string;
+  amountPaid?: number | null;
+  changeDue?: number | null;
   status: string;
   notes?: string | null;
   createdAt: string;
   details: SaleDetail[];
+  pointsEarned?: number | null;
 }
 
 interface BusinessSettingsForBoleta {
@@ -102,8 +107,10 @@ export async function generateBoleta(
   y = 46;
 
   // ─── INFO ROW ───────────────────────────────────────────────────────────────
+  const hasClientDetails = Boolean(sale.customerNitCi || sale.customerPhone);
+  const infoHeight = hasClientDetails ? 34 : 28;
   doc.setFillColor(...LIGHT_BG);
-  doc.roundedRect(14, y, pageW - 28, 28, 3, 3, "F");
+  doc.roundedRect(14, y, pageW - 28, infoHeight, 3, 3, "F");
 
   const col1 = 20;
   const col2 = pageW / 2 + 4;
@@ -112,19 +119,31 @@ export async function generateBoleta(
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...GRAY);
   doc.text("FECHA", col1, y + 8);
-  doc.text("MÉTODO DE PAGO", col1, y + 18);
+  doc.text("MÉTODO DE PAGO", col1, y + (hasClientDetails ? 22 : 18));
   doc.text("CLIENTE", col2, y + 8);
-  doc.text("VENDEDOR", col2, y + 18);
+  doc.text("VENDEDOR", col2, y + (hasClientDetails ? 22 : 18));
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...DARK);
   doc.setFontSize(9);
   doc.text(fmtDate(sale.createdAt), col1, y + 14);
-  doc.text(sale.paymentMethod, col1, y + 24);
+  doc.text(sale.paymentMethod, col1, y + (hasClientDetails ? 28 : 24));
   doc.text(sale.customerName || "Consumidor Final", col2, y + 14);
-  doc.text(sale.userName || "—", col2, y + 24);
 
-  y += 36;
+  if (hasClientDetails) {
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GRAY);
+    const extraParts: string[] = [];
+    if (sale.customerNitCi) extraParts.push(`CI/NIT: ${sale.customerNitCi}`);
+    if (sale.customerPhone) extraParts.push(`Tel: ${sale.customerPhone}`);
+    doc.text(extraParts.join("   •   "), col2, y + 18);
+  }
+
+  doc.setFontSize(9);
+  doc.setTextColor(...DARK);
+  doc.text(sale.userName || "—", col2, y + (hasClientDetails ? 28 : 24));
+
+  y += infoHeight + 8;
 
   // ─── STATUS BADGE ───────────────────────────────────────────────────────────
   const isCompleted = sale.status === "completada";
@@ -182,36 +201,52 @@ export async function generateBoleta(
   y = (doc as any).lastAutoTable.finalY + 6;
 
   // ─── TOTALS BOX ─────────────────────────────────────────────────────────────
-  const boxW = 78;
+  const isCash = (sale.paymentMethod || "").toLowerCase().includes("efectivo") || sale.amountPaid != null;
+  const cashRec = sale.amountPaid !== undefined && sale.amountPaid !== null
+    ? Number(sale.amountPaid)
+    : (isCash ? Number(sale.total) : null);
+  const chgDue = sale.changeDue !== undefined && sale.changeDue !== null
+    ? Number(sale.changeDue)
+    : 0;
+  const hasCashInfo = isCash && cashRec !== null;
+  const boxH = hasCashInfo ? 38 : 24;
+  const boxW = 84;
   const boxX = pageW - 14 - boxW;
   doc.setFillColor(...LIGHT_BG);
-  doc.roundedRect(boxX, y, boxW, 32, 3, 3, "F");
+  doc.roundedRect(boxX, y, boxW, boxH, 3, 3, "F");
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...GRAY);
-  doc.text("Subtotal:", boxX + 6, y + 9);
-  doc.text("IVA (13%):", boxX + 6, y + 18);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  doc.text("TOTAL:", boxX + 6, y + 28);
+  doc.text("Subtotal:", boxX + 6, y + 8);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...DARK);
-  doc.text(fmtMoney(sale.subtotal, sym), boxX + boxW - 6, y + 9, { align: "right" });
-  doc.text(fmtMoney(sale.iva, sym), boxX + boxW - 6, y + 18, { align: "right" });
+  doc.text(fmtMoney(sale.subtotal, sym), boxX + boxW - 6, y + 8, { align: "right" });
 
   doc.setFillColor(...INDIGO);
-  doc.roundedRect(boxX, y + 22, boxW, 10, 2, 2, "F");
+  doc.roundedRect(boxX, y + 13, boxW, 11, 2, 2, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(255, 255, 255);
-  doc.text(fmtMoney(sale.total, sym), boxX + boxW - 6, y + 29, { align: "right" });
-  doc.text("TOTAL", boxX + 6, y + 29);
+  doc.text(fmtMoney(sale.total, sym), boxX + boxW - 6, y + 21, { align: "right" });
+  doc.text("TOTAL", boxX + 6, y + 21);
 
-  y += 40;
+  if (hasCashInfo) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...DARK);
+    doc.text("Efectivo Recibido:", boxX + 6, y + 29);
+    doc.text(fmtMoney(cashRec, sym), boxX + boxW - 6, y + 29, { align: "right" });
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(4, 120, 87); // Emerald green
+    doc.text("Cambio:", boxX + 6, y + 34.5);
+    doc.text(fmtMoney(chgDue, sym), boxX + boxW - 6, y + 34.5, { align: "right" });
+  }
+
+  y += boxH + 8;
 
   // ─── NOTES ──────────────────────────────────────────────────────────────────
   if (sale.notes) {
@@ -220,6 +255,28 @@ export async function generateBoleta(
     doc.setTextColor(...GRAY);
     doc.text(`Nota: ${sale.notes}`, 14, y);
     y += 8;
+  }
+
+  // ─── PUNTOS GANADOS ────────────────────────────────────────────────────────
+  if (sale.pointsEarned && sale.pointsEarned > 0) {
+    const bannerW = pageW - 28;
+    doc.setFillColor(254, 243, 199);
+    doc.roundedRect(14, y, bannerW, 16, 2.5, 2.5, "F");
+    doc.setDrawColor(245, 158, 11);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(14, y, bannerW, 16, 2.5, 2.5, "S");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(180, 83, 9);
+    doc.text(`* PUNTOS GANADOS EN ESTA COMPRA: +${sale.pointsEarned} pts`, 20, y + 6.5);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(146, 64, 14);
+    doc.text("¡Felicidades! Puedes canjear estos puntos por descuentos en tu proxima compra.", 20, y + 12);
+
+    y += 22;
   }
 
   // ─── FOOTER ─────────────────────────────────────────────────────────────────

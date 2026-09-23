@@ -11,6 +11,8 @@ const ROLE_PERMISSIONS: Record<string, PermissionMap> = {
   vendedor: {
     sales:     ["read", "create"],
     customers: ["read", "create", "update"],
+    reports:   ["read"],
+    loyalty:   ["read", "create", "update"],
   },
   inventario: {
     products:   ["read", "create", "update"],

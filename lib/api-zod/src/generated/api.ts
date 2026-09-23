@@ -481,6 +481,8 @@ export const GetSalesResponseItem = zod.object({
   iva: zod.number(),
   total: zod.number(),
   paymentMethod: zod.string(),
+  amountPaid: zod.number().nullish(),
+  changeDue: zod.number().nullish(),
   status: zod.string(),
   notes: zod.string().nullish(),
   createdAt: zod.string(),
@@ -500,6 +502,8 @@ export const CreateSaleBody = zod.object({
     }),
   ),
   paymentMethod: zod.string(),
+  amountPaid: zod.number().nullish(),
+  changeDue: zod.number().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -520,6 +524,8 @@ export const GetSaleByIdResponse = zod.object({
   iva: zod.number(),
   total: zod.number(),
   paymentMethod: zod.string(),
+  amountPaid: zod.number().nullish(),
+  changeDue: zod.number().nullish(),
   status: zod.string(),
   notes: zod.string().nullish(),
   createdAt: zod.string(),

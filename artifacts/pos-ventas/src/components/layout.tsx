@@ -53,7 +53,7 @@ const ROLE_DEFAULT_ROUTE: Record<string, string> = {
 /** Paths a role is allowed to visit. Empty array = all allowed (admin). */
 const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
   admin:      [],
-  vendedor:   ["/pos", "/sales", "/customers"],
+  vendedor:   ["/pos", "/sales", "/customers", "/reports", "/loyalty"],
   inventario: ["/products", "/categories", "/brands", "/inventory"],
   compras:    ["/suppliers", "/quotes"],
 };
@@ -82,7 +82,7 @@ const ALL_NAV_GROUPS = [
       { href: "/sales",       label: "Historial",     icon: ShoppingCart, roles: ["admin", "vendedor"] },
       { href: "/cierre-caja", label: "Cierre de Caja", icon: LockKeyhole, roles: ["admin"] },
       { href: "/quotes",      label: "Cotizaciones",  icon: FileText,     roles: ["admin", "compras"] },
-      { href: "/reports",     label: "Reportes",      icon: BarChart2,    roles: ["admin"] },
+      { href: "/reports",     label: "Reportes",      icon: BarChart2,    roles: ["admin", "vendedor"] },
     ],
   },
   {
@@ -101,7 +101,7 @@ const ALL_NAV_GROUPS = [
     items: [
       { href: "/customers",  label: "Clientes",      icon: Users, roles: ["admin", "vendedor"] },
       { href: "/suppliers",  label: "Proveedores",   icon: Truck, roles: ["admin", "compras"] },
-      { href: "/loyalty",    label: "Fidelización",  icon: Star,  roles: ["admin"] },
+      { href: "/loyalty",    label: "Fidelización",  icon: Star,  roles: ["admin", "vendedor"] },
     ],
   },
 ];
@@ -137,8 +137,16 @@ export function Layout({ children }: { children: ReactNode }) {
   const handleBackup = async () => {
     setBackupLoading(true);
     try {
-      const res = await fetch("/api/backup", { headers: { Authorization: `Bearer ${getToken()}` } });
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      const normalizedApiUrl = apiUrl.replace(/\/$/, "");
+      const res = await fetch(`${normalizedApiUrl}/backup`, { 
+        headers: { Authorization: `Bearer ${getToken()}` } 
+      });
       if (!res.ok) throw new Error("Error al generar backup");
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("El servidor no devolvió un archivo JSON válido");
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -148,8 +156,8 @@ export function Layout({ children }: { children: ReactNode }) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch {
-      alert("Error al generar el backup");
+    } catch (err: any) {
+      alert(err.message || "Error al generar el backup");
     } finally {
       setBackupLoading(false);
     }

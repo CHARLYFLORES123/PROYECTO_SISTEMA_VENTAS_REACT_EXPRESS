@@ -51,7 +51,6 @@ export default function CierreCaja() {
       "Vendedor": s.userName || "—",
       "Método de Pago": s.paymentMethod,
       "Subtotal": s.subtotal,
-      "IVA": s.iva,
       "Total": s.total,
       "Estado": s.status,
     }));
@@ -271,10 +270,6 @@ export default function CierreCaja() {
                     <div className="flex items-center gap-3">
                       <span>Subtotal:</span>
                       <span className="font-medium">{formatCurrency(cierreData.totalSubtotal, currencySymbol)}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span>IVA (13%):</span>
-                      <span className="font-medium">{formatCurrency(cierreData.totalIva, currencySymbol)}</span>
                     </div>
                   </div>
                   <div className="text-right">

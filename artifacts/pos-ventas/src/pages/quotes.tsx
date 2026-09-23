@@ -123,8 +123,7 @@ export default function Quotes() {
     () => cart.reduce((acc, item) => acc + item.quantity * item.unitPrice, 0),
     [cart]
   );
-  const iva = subtotal * 0.13;
-  const total = subtotal + iva;
+  const total = subtotal;
 
   const addToCart = (product: any) => {
     setCart((prev) => {
@@ -460,10 +459,6 @@ export default function Quotes() {
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotal, currencySymbol)}</span>
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>IVA (13%)</span>
-                <span>{formatCurrency(iva, currencySymbol)}</span>
               </div>
               <div className="flex justify-between font-bold text-base pt-1">
                 <span>TOTAL</span>

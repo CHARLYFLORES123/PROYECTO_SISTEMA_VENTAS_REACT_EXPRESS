@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Download, Printer, X, ShoppingCart, Receipt } from "lucide-react";
+import { CheckCircle2, Download, Printer, X, ShoppingCart, Receipt, Star, Gift } from "lucide-react";
 import { downloadBoleta, printBoleta } from "@/lib/generate-boleta";
 import { downloadTicket, printTicket } from "@/lib/generate-ticket";
 import { useGetBusinessSettings } from "@workspace/api-client-react";
@@ -18,15 +18,20 @@ interface SaleDetail {
 interface CompletedSale {
   id: number;
   customerName?: string | null;
+  customerNitCi?: string | null;
+  customerPhone?: string | null;
   userName?: string | null;
   subtotal: number;
   iva: number;
   total: number;
   paymentMethod: string;
+  amountPaid?: number | null;
+  changeDue?: number | null;
   status: string;
   notes?: string | null;
   createdAt: string;
   details: SaleDetail[];
+  pointsEarned?: number | null;
 }
 
 interface BoletaModalProps {
@@ -79,7 +84,14 @@ export function BoletaModal({ sale, onClose }: BoletaModalProps) {
           <div className="rounded-xl border border-border bg-muted/30 divide-y divide-border">
             <div className="flex justify-between items-center px-4 py-2.5 text-sm">
               <span className="text-muted-foreground">Cliente</span>
-              <span className="font-medium">{sale.customerName || "Consumidor Final"}</span>
+              <div className="text-right">
+                <span className="font-medium block">{sale.customerName || "Consumidor Final"}</span>
+                {(sale.customerNitCi || sale.customerPhone) && (
+                  <span className="text-[11px] text-muted-foreground block">
+                    {[sale.customerNitCi ? `CI/NIT: ${sale.customerNitCi}` : "", sale.customerPhone ? `Tel: ${sale.customerPhone}` : ""].filter(Boolean).join(" • ")}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex justify-between items-center px-4 py-2.5 text-sm">
               <span className="text-muted-foreground">Método de Pago</span>
@@ -89,14 +101,32 @@ export function BoletaModal({ sale, onClose }: BoletaModalProps) {
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(sale.subtotal, currencySymbol)}</span>
             </div>
-            <div className="flex justify-between items-center px-4 py-2.5 text-sm">
-              <span className="text-muted-foreground">IVA (13%)</span>
-              <span>{formatCurrency(sale.iva, currencySymbol)}</span>
-            </div>
+
             <div className="flex justify-between items-center px-4 py-3 bg-primary/5">
               <span className="font-bold text-sm">TOTAL</span>
               <span className="font-bold text-xl text-primary">{formatCurrency(sale.total, currencySymbol)}</span>
             </div>
+
+            {(() => {
+              const isCash = (sale.paymentMethod || "").toLowerCase().includes("efectivo") || sale.amountPaid != null;
+              if (!isCash) return null;
+              const rec = sale.amountPaid !== undefined && sale.amountPaid !== null ? Number(sale.amountPaid) : Number(sale.total);
+              const chg = sale.changeDue !== undefined && sale.changeDue !== null ? Number(sale.changeDue) : 0;
+              return (
+                <div className="px-4 py-2.5 bg-emerald-50/70 space-y-1 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-emerald-800 font-medium">Efectivo Recibido:</span>
+                    <span className="font-bold text-emerald-950 font-mono">{formatCurrency(rec, currencySymbol)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-emerald-800 font-medium">Cambio Entregado:</span>
+                    <span className="font-bold text-base text-emerald-700 font-mono">
+                      {formatCurrency(chg, currencySymbol)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Products mini-list */}
@@ -110,6 +140,29 @@ export function BoletaModal({ sale, onClose }: BoletaModalProps) {
               </div>
             ))}
           </div>
+
+          {sale.notes && (
+            <div className="p-2 bg-amber-50 border border-amber-200/80 rounded-lg text-xs text-amber-800">
+              <span className="font-semibold block text-[10px] uppercase tracking-wide text-amber-900">Detalles / Descuento:</span>
+              <span>{sale.notes}</span>
+            </div>
+          )}
+
+          {sale.pointsEarned && sale.pointsEarned > 0 ? (
+            <div className="p-2.5 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-300 rounded-xl text-xs flex items-center gap-2.5 shadow-2xs">
+              <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-700 shrink-0 font-bold">
+                <Star className="w-4 h-4 fill-amber-400 text-amber-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-amber-900">
+                  ¡Ganaste +{sale.pointsEarned.toLocaleString("es")} puntos en esta compra!
+                </p>
+                <p className="text-[10px] text-amber-700 mt-0.5">
+                  Puedes canjearlos por descuentos en tu próxima compra.
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Action buttons */}

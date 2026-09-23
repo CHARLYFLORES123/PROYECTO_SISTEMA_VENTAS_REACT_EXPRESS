@@ -10,7 +10,7 @@ router.use(verifyToken);
 
 const canWrite = requireRoles(["admin", "compras"]);
 
-const IVA_RATE = 0.13;
+const IVA_RATE = 0;
 
 function fmtQuote(q: any, customerName?: string | null, userName?: string | null) {
   return {
@@ -57,8 +57,8 @@ router.post("/", canWrite, async (req: AuthRequest, res) => {
     const productMap = new Map(products.map(p => [p.id, p]));
 
     const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-    const iva = subtotal * IVA_RATE;
-    const total = subtotal + iva;
+    const iva = 0;
+    const total = subtotal;
 
     const result = await db.transaction(async (tx) => {
       const [quote] = await tx.insert(quotesTable).values({

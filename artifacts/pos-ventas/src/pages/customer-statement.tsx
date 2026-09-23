@@ -335,14 +335,13 @@ export default function CustomerStatement() {
                 <TableHead className="text-xs font-semibold uppercase tracking-wide">Método de Pago</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide">Estado</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-right">Subtotal</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-right">IVA</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-right">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground text-sm">
+                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
                       Cargando historial...
@@ -352,7 +351,7 @@ export default function CustomerStatement() {
               )}
               {!loading && filteredSales.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground text-sm">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground text-sm">
                     <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-20" />
                     {period !== "all"
                       ? "Sin transacciones en el período seleccionado"
@@ -380,9 +379,6 @@ export default function CustomerStatement() {
                     <TableCell className="text-right text-sm text-muted-foreground">
                       {formatCurrency(s.subtotal, currencySymbol)}
                     </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">
-                      {formatCurrency(s.iva, currencySymbol)}
-                    </TableCell>
                     <TableCell className="text-right font-semibold text-sm text-indigo-700">
                       {formatCurrency(s.total, currencySymbol)}
                     </TableCell>
@@ -397,9 +393,6 @@ export default function CustomerStatement() {
                   </TableCell>
                   <TableCell className="text-right text-sm text-indigo-700">
                     {formatCurrency(completedSales.reduce((a, s) => a + s.subtotal, 0), currencySymbol)}
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-indigo-700">
-                    {formatCurrency(completedSales.reduce((a, s) => a + s.iva, 0), currencySymbol)}
                   </TableCell>
                   <TableCell className="text-right text-base font-bold text-indigo-700">
                     {formatCurrency(totalSpent, currencySymbol)}

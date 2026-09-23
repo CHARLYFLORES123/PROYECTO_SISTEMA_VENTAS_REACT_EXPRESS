@@ -3,7 +3,7 @@ import { useGetSaleById, useGetBusinessSettings } from "@workspace/api-client-re
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, Printer, FileText, Receipt } from "lucide-react";
+import { ArrowLeft, Download, Printer, FileText, Receipt, Star } from "lucide-react";
 import { Link } from "wouter";
 import { downloadBoleta, printBoleta } from "@/lib/generate-boleta";
 import { downloadTicket, printTicket } from "@/lib/generate-ticket";
@@ -68,6 +68,13 @@ export default function SaleDetail() {
   }
 
   const isCompleted = sale.status === "completada";
+  const isCashSale = (sale.paymentMethod || "").toLowerCase().includes("efectivo") || (sale as any).amountPaid != null;
+  const cashReceived = (sale as any).amountPaid !== null && (sale as any).amountPaid !== undefined
+    ? Number((sale as any).amountPaid)
+    : (isCashSale ? Number(sale.total) : null);
+  const changeDue = (sale as any).changeDue !== null && (sale as any).changeDue !== undefined
+    ? Number((sale as any).changeDue)
+    : 0;
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
@@ -162,12 +169,30 @@ export default function SaleDetail() {
           <CardContent className="p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Cliente</p>
             <p className="font-semibold text-sm">{sale.customerName || "Consumidor Final"}</p>
+            {(sale as any).customerNitCi && (
+              <p className="text-xs text-muted-foreground mt-0.5">CI/NIT: <span className="font-mono font-medium text-foreground">{(sale as any).customerNitCi}</span></p>
+            )}
+            {(sale as any).customerPhone && (
+              <p className="text-xs text-muted-foreground mt-0.5">Tel: {(sale as any).customerPhone}</p>
+            )}
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Método de Pago</p>
             <p className="font-semibold text-sm">{sale.paymentMethod}</p>
+            {isCashSale && cashReceived !== null && (
+              <div className="mt-2.5 pt-2 border-t border-border/60 space-y-1 text-xs">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Efectivo Recibido:</span>
+                  <span className="font-semibold font-mono text-foreground">{formatCurrency(cashReceived, currencySymbol)}</span>
+                </div>
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span className="font-medium">Monto a Devolver (Cambio):</span>
+                  <span className="font-bold font-mono text-emerald-700">{formatCurrency(changeDue, currencySymbol)}</span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
@@ -177,6 +202,23 @@ export default function SaleDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Puntos Ganados Banner */}
+      {(sale as any).pointsEarned && (sale as any).pointsEarned > 0 ? (
+        <div className="rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50 p-3.5 flex items-center gap-3 shadow-2xs">
+          <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-700 shrink-0 font-bold">
+            <Star className="w-5 h-5 fill-amber-400 text-amber-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-amber-900">
+              ¡Puntos Ganados en esta venta: +{(sale as any).pointsEarned.toLocaleString("es")} pts!
+            </p>
+            <p className="text-[11px] text-amber-700 mt-0.5">
+              El cliente puede canjear estos puntos por descuentos en su próxima compra.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Products table */}
       <Card className="border-0 shadow-sm overflow-hidden">
@@ -211,19 +253,29 @@ export default function SaleDetail() {
 
           {/* Totals */}
           <div className="p-5 border-t bg-muted/10 flex justify-end">
-            <div className="w-64 space-y-2.5">
+            <div className="w-72 space-y-2.5">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-medium">{formatCurrency(sale.subtotal, currencySymbol)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">IVA (13%)</span>
-                <span className="font-medium">{formatCurrency(sale.iva, currencySymbol)}</span>
               </div>
               <div className="flex justify-between items-center pt-2.5 border-t">
                 <span className="font-bold">TOTAL</span>
                 <span className="font-bold text-2xl text-primary">{formatCurrency(sale.total, currencySymbol)}</span>
               </div>
+              {isCashSale && cashReceived !== null && (
+                <div className="pt-2.5 border-t border-dashed space-y-1.5 bg-emerald-50/80 p-3 rounded-xl border border-emerald-200 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-emerald-800 font-medium">Efectivo Recibido:</span>
+                    <span className="font-semibold text-emerald-950 font-mono text-sm">{formatCurrency(cashReceived, currencySymbol)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-emerald-200/60 pt-1.5">
+                    <span className="text-emerald-800 font-bold uppercase tracking-wider text-[11px]">Monto a Devolver (Cambio):</span>
+                    <span className="font-extrabold text-base text-emerald-700 font-mono">
+                      {formatCurrency(changeDue, currencySymbol)}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
