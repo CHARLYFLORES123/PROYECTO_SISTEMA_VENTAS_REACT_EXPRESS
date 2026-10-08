@@ -12,7 +12,7 @@ interface ImageUploadProps {
   className?: string;
 }
 
-function compressImage(file: File, maxW: number, maxH: number, quality: number): Promise<string> {
+export function compressImage(file: File, maxW: number, maxH: number, quality: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {

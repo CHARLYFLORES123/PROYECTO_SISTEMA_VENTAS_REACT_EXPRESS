@@ -63,6 +63,12 @@ interface CartItem {
   unitPrice: number;
 }
 
+function productLabel(product: { name: string; size?: string | null; color?: string | null }) {
+  return [product.name, product.size && `Talla ${product.size}`, product.color && `Color ${product.color}`]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 const STATUS_CONFIG = {
   pendiente: {
     label: "Pendiente",
@@ -123,8 +129,7 @@ export default function Quotes() {
     () => cart.reduce((acc, item) => acc + item.quantity * item.unitPrice, 0),
     [cart]
   );
-  const iva = subtotal * 0.13;
-  const total = subtotal + iva;
+  const total = subtotal;
 
   const addToCart = (product: any) => {
     setCart((prev) => {
@@ -140,7 +145,7 @@ export default function Quotes() {
         ...prev,
         {
           productId: product.id,
-          productName: product.name,
+          productName: productLabel(product),
           quantity: 1,
           unitPrice: product.salePrice,
         },
@@ -286,7 +291,7 @@ export default function Quotes() {
                 >
                   <CardContent className="p-3 flex flex-col gap-1">
                     <div className="font-semibold text-sm leading-tight line-clamp-2">
-                      {product.name}
+                      {productLabel(product)}
                     </div>
                     <div className="text-[10px] text-muted-foreground">
                       {product.barcode || "Sin código"}
@@ -460,10 +465,6 @@ export default function Quotes() {
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotal, currencySymbol)}</span>
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>IVA (13%)</span>
-                <span>{formatCurrency(iva, currencySymbol)}</span>
               </div>
               <div className="flex justify-between font-bold text-base pt-1">
                 <span>TOTAL</span>

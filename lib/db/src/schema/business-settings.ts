@@ -13,9 +13,13 @@ export const businessSettingsTable = pgTable("business_settings", {
   currency: varchar("currency", { length: 10 }).notNull().default("BOB"),
   currencySymbol: varchar("currency_symbol", { length: 10 }).notNull().default("Bs"),
   // Loyalty / points
-  loyaltyEnabled: boolean("loyalty_enabled").notNull().default(false),
+  loyaltyEnabled: boolean("loyalty_enabled").notNull().default(true),
   pointsPerUnit: integer("points_per_unit").notNull().default(1),
   pointsRedemptionRate: numeric("points_redemption_rate", { precision: 8, scale: 4 }).notNull().default("0.01"),
+  // Cash drawer (cajón conectado a la impresora térmica)
+  openCashDrawer: boolean("open_cash_drawer").notNull().default(true),
+  cashDrawerOnlyCash: boolean("cash_drawer_only_cash").notNull().default(true),
+  printerName: varchar("printer_name", { length: 200 }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

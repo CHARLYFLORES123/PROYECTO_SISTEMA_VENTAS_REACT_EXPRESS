@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
 import { useGetSales, useGetBusinessSettings } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import {
   TrendingUp, Receipt, Printer, Download, CalendarDays,
-  Banknote, ShoppingBag, XCircle, ArrowRight,
+  Banknote, ShoppingBag, XCircle, ArrowRight, LockKeyhole, UnlockKeyhole,
 } from "lucide-react";
 import { useCurrency, formatCurrency } from "@/contexts/currency-context";
 import { computeCierreData, printCierre } from "@/lib/generate-cierre";
@@ -16,18 +18,113 @@ import * as XLSX from "xlsx";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
+import { usePermissions } from "@/hooks/use-permissions";
+import { Toast } from "@/lib/swal";
+import { exportTablePDF } from "@/lib/export-table-pdf";
 
 const CHART_COLORS = [
   "#4F46E5", "#10b981", "#f59e0b", "#ef4444",
   "#8b5cf6", "#ec4899", "#14b8a6", "#f97316",
 ];
 
+type CashRegisterSession = {
+  id: number;
+  businessDate: string;
+  status: "open" | "closed";
+  openingAmount: number;
+  cashSales: number;
+  totalsByMethod: Record<string, number>;
+  expenses: Array<{ id: number; description: string; amount: number; authorizedByName: string; createdAt: string }>;
+  totalExpenses: number;
+  expectedCash: number;
+  countedCash: number | null;
+  difference: number | null;
+  openedAt: string;
+  closedAt: string | null;
+} | null;
+
 export default function CierreCaja() {
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [printing, setPrinting] = useState(false);
+  const [openingAmount, setOpeningAmount] = useState("");
+  const [countedCash, setCountedCash] = useState("");
+  const [expenseDescription, setExpenseDescription] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [cashActionLoading, setCashActionLoading] = useState(false);
 
   const { currencySymbol } = useCurrency();
   const { data: settings } = useGetBusinessSettings();
+  const { role } = usePermissions();
+  const canAuthorizeExpenses = ["admin", "inventario"].includes(role.toLowerCase());
+  const queryClient = useQueryClient();
+  const { data: registerSession, isLoading: registerLoading, error: registerError } = useQuery<CashRegisterSession>({
+    queryKey: ["/api/cash-register", date],
+    queryFn: () => customFetch(`/api/cash-register?date=${date}`),
+    enabled: !!date,
+    refetchInterval: 15000,
+  });
+
+  const refreshRegister = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["/api/cash-register", date] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
+  };
+
+  const handleOpenRegister = async () => {
+    const amount = Number(openingAmount);
+    if (!Number.isFinite(amount) || amount < 0) return;
+    setCashActionLoading(true);
+    try {
+      await customFetch("/api/cash-register/open", {
+        method: "POST",
+        body: JSON.stringify({ businessDate: date, openingAmount: amount }),
+      });
+      setOpeningAmount("");
+      await refreshRegister();
+    } catch (error) {
+      Toast.fire({ icon: "error", title: error instanceof Error ? error.message : "No se pudo abrir la caja" });
+    } finally {
+      setCashActionLoading(false);
+    }
+  };
+
+  const handleAuthorizeExpense = async () => {
+    if (!registerSession || !expenseDescription.trim()) return;
+    const amount = Number(expenseAmount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    setCashActionLoading(true);
+    try {
+      await customFetch(`/api/cash-register/${registerSession.id}/expenses`, {
+        method: "POST",
+        body: JSON.stringify({ description: expenseDescription.trim(), amount }),
+      });
+      setExpenseDescription("");
+      setExpenseAmount("");
+      await refreshRegister();
+    } catch (error) {
+      Toast.fire({ icon: "error", title: error instanceof Error ? error.message : "No se pudo registrar el gasto" });
+    } finally {
+      setCashActionLoading(false);
+    }
+  };
+
+  const handleCloseRegister = async () => {
+    if (!registerSession) return;
+    const amount = Number(countedCash);
+    if (!Number.isFinite(amount) || amount < 0) return;
+    setCashActionLoading(true);
+    try {
+      await customFetch(`/api/cash-register/${registerSession.id}/close`, {
+        method: "POST",
+        body: JSON.stringify({ countedCash: amount }),
+      });
+      setCountedCash("");
+      await refreshRegister();
+    } catch (error) {
+      Toast.fire({ icon: "error", title: error instanceof Error ? error.message : "No se pudo cerrar la caja" });
+    } finally {
+      setCashActionLoading(false);
+    }
+  };
 
   const { data: rawSales = [], isLoading } = useGetSales(
     { dateFrom: date, dateTo: date },
@@ -49,9 +146,10 @@ export default function CierreCaja() {
       "Fecha/Hora": new Date(s.createdAt).toLocaleString("es-BO"),
       "Cliente": s.customerName || "Consumidor Final",
       "Vendedor": s.userName || "—",
-      "Método de Pago": s.paymentMethod,
+      "Método de Pago": s.payments?.map((payment: { paymentMethod: string; amount: number }) =>
+        `${payment.paymentMethod}: ${payment.amount.toFixed(2)}`,
+      ).join(" / ") || s.paymentMethod,
       "Subtotal": s.subtotal,
-      "IVA": s.iva,
       "Total": s.total,
       "Estado": s.status,
     }));
@@ -65,6 +163,35 @@ export default function CierreCaja() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Resumen");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Transacciones");
     XLSX.writeFile(wb, `Cierre_Caja_${date}.xlsx`);
+  };
+
+  const handleExportPDF = () => {
+    const paymentTotals = registerSession
+      ? Object.entries(registerSession.totalsByMethod)
+        .map(([method, total]) => `${method}: ${formatCurrency(total, currencySymbol)}`)
+        .join(" · ")
+      : "";
+    const expenseDetails = registerSession?.expenses.length
+      ? ` · Gastos: ${registerSession.expenses.map((expense) => `${expense.description} (${formatCurrency(expense.amount, currencySymbol)})`).join(", ")}`
+      : "";
+    const cashSummary = registerSession
+      ? `Apertura: ${formatCurrency(registerSession.openingAmount, currencySymbol)} · Ventas: ${paymentTotals || "sin ventas"} · Gastos autorizados: ${formatCurrency(registerSession.totalExpenses, currencySymbol)} · Efectivo esperado: ${formatCurrency(registerSession.expectedCash, currencySymbol)}${registerSession.countedCash !== null ? ` · Efectivo contado: ${formatCurrency(registerSession.countedCash, currencySymbol)} · Diferencia: ${formatCurrency(registerSession.difference ?? 0, currencySymbol)}` : ""}${expenseDetails}`
+      : "No hay una caja abierta o cerrada para esta fecha";
+    exportTablePDF({
+      title: `Cierre de Caja · ${date}`,
+      fileName: `Cierre_Caja_${date}.pdf`,
+      subtitle: cashSummary,
+      headers: ["N° Venta", "Fecha/Hora", "Cliente", "Vendedor", "Métodos de pago", "Total", "Estado"],
+      rows: cierreData.sales.map((sale) => [
+        `#${String(sale.id).padStart(6, "0")}`,
+        new Date(sale.createdAt).toLocaleString("es-BO"),
+        sale.customerName || "Consumidor Final",
+        sale.userName || "-",
+        sale.payments?.map((payment: { paymentMethod: string; amount: number }) => `${payment.paymentMethod}: ${formatCurrency(payment.amount, currencySymbol)}`).join(" / ") || sale.paymentMethod,
+        formatCurrency(sale.total, currencySymbol),
+        sale.status,
+      ]),
+    });
   };
 
   const avg = cierreData.countCompleted > 0
@@ -103,6 +230,16 @@ export default function CierreCaja() {
             <Download className="w-3.5 h-3.5" />
             Excel
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl gap-1.5"
+            onClick={handleExportPDF}
+            disabled={cierreData.sales.length === 0 && !registerSession}
+          >
+            <Download className="w-3.5 h-3.5" />
+            PDF
+          </Button>
 
           <Button
             size="sm"
@@ -119,6 +256,97 @@ export default function CierreCaja() {
           </Button>
         </div>
       </div>
+
+      <Card className="border-primary/15 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            {registerSession?.status === "open" ? <UnlockKeyhole className="h-4 w-4 text-emerald-600" /> : <LockKeyhole className="h-4 w-4 text-primary" />}
+            Apertura y cierre de caja
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Caja individual del usuario · {date}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {registerLoading ? <p className="text-sm text-muted-foreground">Consultando caja...</p>
+            : registerError ? <p role="alert" className="text-sm text-destructive">{registerError instanceof Error ? registerError.message : "No se pudo consultar la caja"}</p>
+              : !registerSession ? date !== format(new Date(), "yyyy-MM-dd") ? (
+                <p className="text-sm text-muted-foreground">No existe una caja registrada para esta fecha. La apertura solo se puede realizar para el día actual.</p>
+              ) : (
+                <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); void handleOpenRegister(); }}>
+                  <label className="space-y-1.5 text-sm font-medium">
+                    Efectivo inicial
+                    <Input type="number" min="0" step="0.01" required value={openingAmount} onChange={(event) => setOpeningAmount(event.target.value)} placeholder="300.00" />
+                  </label>
+                  <Button type="submit" disabled={cashActionLoading || openingAmount === ""}>
+                    <UnlockKeyhole className="mr-2 h-4 w-4" /> Abrir caja
+                  </Button>
+                </form>
+              ) : <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground">Efectivo inicial</p>
+                    <p className="text-lg font-bold">{formatCurrency(registerSession.openingAmount, currencySymbol)}</p>
+                  </div>
+                  <div className="rounded-lg bg-emerald-50 p-3">
+                    <p className="text-xs text-muted-foreground">Ventas en efectivo</p>
+                    <p className="text-lg font-bold text-emerald-700">+{formatCurrency(registerSession.cashSales, currencySymbol)}</p>
+                  </div>
+                  <div className="rounded-lg bg-red-50 p-3">
+                    <p className="text-xs text-muted-foreground">Gastos autorizados</p>
+                    <p className="text-lg font-bold text-red-700">-{formatCurrency(registerSession.totalExpenses, currencySymbol)}</p>
+                  </div>
+                  <div className="rounded-lg bg-primary/5 p-3">
+                    <p className="text-xs text-muted-foreground">Efectivo esperado</p>
+                    <p className="text-lg font-bold text-primary">{formatCurrency(registerSession.expectedCash, currencySymbol)}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                  {Object.entries(registerSession.totalsByMethod).map(([method, total]) => (
+                    <span key={method}>{method}: {formatCurrency(total, currencySymbol)}</span>
+                  ))}
+                </div>
+
+                {registerSession.expenses.length > 0 && <div className="space-y-1">
+                  <p className="text-sm font-semibold">Gastos descontados del efectivo</p>
+                  {registerSession.expenses.map((expense) => (
+                    <div key={expense.id} className="flex justify-between gap-3 text-xs text-muted-foreground">
+                      <span>{expense.description} · autorizado por {expense.authorizedByName}</span>
+                      <span>-{formatCurrency(expense.amount, currencySymbol)}</span>
+                    </div>
+                  ))}
+                </div>}
+
+                {registerSession.status === "open" ? <>
+                  {canAuthorizeExpenses && <form className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_160px_auto]" onSubmit={(event) => { event.preventDefault(); void handleAuthorizeExpense(); }}>
+                    <label className="space-y-1 text-xs font-medium">
+                      Gasto autorizado
+                      <Input maxLength={300} required value={expenseDescription} onChange={(event) => setExpenseDescription(event.target.value)} placeholder="Descripción" />
+                    </label>
+                    <label className="space-y-1 text-xs font-medium">
+                      Monto
+                      <Input type="number" min="0.01" step="0.01" required value={expenseAmount} onChange={(event) => setExpenseAmount(event.target.value)} placeholder="0.00" />
+                    </label>
+                    <Button type="submit" variant="outline" disabled={cashActionLoading || !expenseDescription.trim() || !expenseAmount}>
+                      Registrar gasto
+                    </Button>
+                  </form>}
+                  <form className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); void handleCloseRegister(); }}>
+                    <label className="space-y-1.5 text-sm font-medium">
+                      Efectivo contado al cierre
+                      <Input type="number" min="0" step="0.01" required value={countedCash} onChange={(event) => setCountedCash(event.target.value)} placeholder="1050.00" />
+                    </label>
+                    <Button type="submit" variant="destructive" disabled={cashActionLoading || countedCash === ""}>
+                      <LockKeyhole className="mr-2 h-4 w-4" /> Cerrar caja y guardar diferencia
+                    </Button>
+                  </form>
+                </> : <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-3">
+                  <div><p className="text-xs text-muted-foreground">Efectivo esperado</p><p className="font-semibold">{formatCurrency(registerSession.expectedCash, currencySymbol)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Efectivo contado</p><p className="font-semibold">{formatCurrency(registerSession.countedCash ?? 0, currencySymbol)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Diferencia registrada</p><p className={`text-lg font-bold ${(registerSession.difference ?? 0) < 0 ? "text-destructive" : (registerSession.difference ?? 0) > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatCurrency(registerSession.difference ?? 0, currencySymbol)}</p></div>
+                </div>}
+              </>}
+        </CardContent>
+      </Card>
 
       {/* ── Summary Cards ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -272,10 +500,6 @@ export default function CierreCaja() {
                       <span>Subtotal:</span>
                       <span className="font-medium">{formatCurrency(cierreData.totalSubtotal, currencySymbol)}</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span>IVA (13%):</span>
-                      <span className="font-medium">{formatCurrency(cierreData.totalIva, currencySymbol)}</span>
-                    </div>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total</p>
@@ -378,7 +602,13 @@ export default function CierreCaja() {
                           <TableCell className="text-sm text-muted-foreground">
                             {(s as any).userName || "—"}
                           </TableCell>
-                          <TableCell className="text-sm">{s.paymentMethod}</TableCell>
+                          <TableCell className="text-sm">
+                            {s.payments?.length
+                              ? s.payments.map((payment: { paymentMethod: string; amount: number }) =>
+                                `${payment.paymentMethod}: ${formatCurrency(payment.amount, currencySymbol)}`,
+                              ).join(" / ")
+                              : s.paymentMethod}
+                          </TableCell>
                           <TableCell className={`text-right text-sm font-bold ${completed ? "text-foreground" : "text-muted-foreground line-through"}`}>
                             {formatCurrency(s.total, currencySymbol)}
                           </TableCell>

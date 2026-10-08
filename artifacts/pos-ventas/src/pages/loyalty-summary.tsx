@@ -12,10 +12,11 @@ import { formatCurrency, useCurrency } from "@/contexts/currency-context";
 import { downloadLoyaltySummary, printLoyaltySummary, type LoyaltySummaryData } from "@/lib/generate-loyalty-summary";
 import { TIERS, TierBadge } from "@/pages/loyalty";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL || `${window.location.origin}/api`).replace(/\/$/, "");
 
 async function apiFetch(path: string) {
-  const res = await fetch(`${BASE}${path}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+  const normalizedPath = path.startsWith("/api/") ? path.slice(4) : path.startsWith("/") ? path : `/${path}`;
+  const res = await fetch(`${API_URL}${normalizedPath}`, { headers: { Authorization: `Bearer ${getToken()}` } });
   if (!res.ok) throw new Error("Error al cargar datos");
   return res.json();
 }

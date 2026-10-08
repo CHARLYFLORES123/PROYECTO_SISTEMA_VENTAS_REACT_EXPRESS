@@ -270,33 +270,27 @@ export async function generateQuotePDF(
   const boxX = pageW - 14 - boxW;
 
   doc.setFillColor(...LIGHT_BG);
-  doc.roundedRect(boxX, y, boxW, 32, 3, 3, "F");
+  doc.roundedRect(boxX, y, boxW, 24, 3, 3, "F");
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...GRAY);
-  doc.text("Subtotal (sin IVA):", boxX + 6, y + 9);
-  doc.text("IVA (13%):", boxX + 6, y + 18);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  doc.text("TOTAL COTIZADO:", boxX + 6, y + 28);
+  doc.text("Subtotal:", boxX + 6, y + 8);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...DARK);
-  doc.text(fmtMoney(quote.subtotal, sym), boxX + boxW - 6, y + 9, { align: "right" });
-  doc.text(fmtMoney(quote.iva, sym), boxX + boxW - 6, y + 18, { align: "right" });
+  doc.text(fmtMoney(quote.subtotal, sym), boxX + boxW - 6, y + 8, { align: "right" });
 
   doc.setFillColor(...AMBER);
-  doc.roundedRect(boxX, y + 22, boxW, 10, 2, 2, "F");
+  doc.roundedRect(boxX, y + 13, boxW, 11, 2, 2, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(255, 255, 255);
-  doc.text(fmtMoney(quote.total, sym), boxX + boxW - 6, y + 29, { align: "right" });
-  doc.text("TOTAL", boxX + 6, y + 29);
+  doc.text(fmtMoney(quote.total, sym), boxX + boxW - 6, y + 21, { align: "right" });
+  doc.text("TOTAL", boxX + 6, y + 21);
 
-  y += 40;
+  y += 32;
 
   // ─── NOTES ────────────────────────────────────────────────────────────────
   if (quote.notes) {

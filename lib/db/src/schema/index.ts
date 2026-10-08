@@ -4,6 +4,7 @@ export * from "./brands";
 export * from "./products";
 export * from "./customers";
 export * from "./suppliers";
+export * from "./inventory";
 export * from "./sales";
 export * from "./quotes";
 export * from "./business-settings";

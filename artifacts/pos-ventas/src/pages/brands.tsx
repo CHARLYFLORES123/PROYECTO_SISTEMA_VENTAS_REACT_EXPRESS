@@ -11,8 +11,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Toast, confirmDelete } from "@/lib/swal";
-import { Pencil, Trash2, Plus, Search } from "lucide-react";
+import { Pencil, Trash2, Plus, Search, FileText } from "lucide-react";
 import { usePermissions } from "@/hooks/use-permissions";
+import { exportTablePDF } from "@/lib/export-table-pdf";
 
 const brandSchema = z.object({
   name: z.string().min(2, "Requerido"),
@@ -86,6 +87,15 @@ export default function Brands() {
   const canDelete = can("brands", "delete");
 
   const filteredBrands = brands?.filter(b => b.name.toLowerCase().includes(search.toLowerCase()));
+  const exportPDF = () => {
+    exportTablePDF({
+      title: "Marcas",
+      fileName: `Marcas_${new Date().toISOString().slice(0, 10)}.pdf`,
+      subtitle: `Resultados filtrados: ${filteredBrands?.length ?? 0}`,
+      headers: ["Nombre", "Descripción"],
+      rows: (filteredBrands ?? []).map((brand) => [brand.name, brand.description || "-"]),
+    });
+  };
 
   const FormContent = () => (
     <Form {...form}>
@@ -113,6 +123,9 @@ export default function Brands() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
           </div>
+          <Button variant="outline" onClick={exportPDF} disabled={!filteredBrands?.length}>
+            <FileText className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">PDF</span>
+          </Button>
           {canCreate && (
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
               <DialogTrigger asChild>

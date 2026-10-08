@@ -36,7 +36,7 @@ export default function Login() {
     formState: { errors },
   } = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "admin@demo.com", password: "admin123" },
+    defaultValues: { email: "", password: "" },
   });
 
   function onSubmit(values: z.infer<typeof loginSchema>) {
@@ -100,7 +100,7 @@ export default function Login() {
                 {...register("email")}
                 type="email"
                 autoComplete="email"
-                placeholder="admin@ejemplo.com"
+                placeholder="usuario@ejemplo.com"
                 className="h-12 border-2 rounded-xl focus:border-primary focus-visible:ring-0 transition-colors"
               />
               {errors.email && (

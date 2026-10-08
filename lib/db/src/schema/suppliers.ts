@@ -9,7 +9,9 @@ export const suppliersTable = pgTable("suppliers", {
   contactName: varchar("contact_name", { length: 200 }),
   email: varchar("email", { length: 256 }),
   phone: varchar("phone", { length: 30 }),
+  whatsapp: varchar("whatsapp", { length: 30 }),
   address: text("address"),
+  city: varchar("city", { length: 150 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -431,6 +431,64 @@ paths:
                 items:
                   $ref: "#/components/schemas/InventoryReportItem"
 
+  # INVENTORY OPERATIONS
+  /inventory/documents:
+    get:
+      operationId: getInventoryDocuments
+      tags: [products]
+      summary: List inventory purchases, supplier orders and stock adjustments
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inventory documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryDocument"
+    post:
+      operationId: createInventoryDocument
+      tags: [products]
+      summary: Register a purchase, supplier order, stock count, damage or loss
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryDocumentBody"
+      responses:
+        "201":
+          description: Inventory document created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryDocument"
+
+  /inventory/documents/{id}/receive:
+    post:
+      operationId: receiveInventoryDocument
+      tags: [products]
+      summary: Receive a prepared supplier order and add its products to stock
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Supplier order received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryDocument"
+
   # CUSTOMERS
   /customers:
     get:
@@ -582,6 +640,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/Supplier"
 
+  /suppliers/{id}/purchases:
+    get:
+      operationId: getSupplierPurchases
+      tags: [suppliers]
+      summary: Get supplier purchase history and outstanding balances
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Supplier purchase history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SupplierPurchase"
+        "404":
+          description: Supplier not found
+
   /suppliers/{id}:
     put:
       operationId: updateSupplier
@@ -727,6 +810,103 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+
+  # CASH REGISTER
+  /cash-register:
+    get:
+      operationId: getCashRegisterSession
+      tags: [sales]
+      summary: Get the current user's cash register session for a business date
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Cash register session, or null when not opened
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: "#/components/schemas/CashRegisterSession"
+                  - type: "null"
+  /cash-register/open:
+    post:
+      operationId: openCashRegister
+      tags: [sales]
+      summary: Open the current user's cash register
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenCashRegisterBody"
+      responses:
+        "201":
+          description: Cash register opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashRegisterSession"
+  /cash-register/{id}/expenses:
+    post:
+      operationId: recordAuthorizedCashExpense
+      tags: [sales]
+      summary: Record an authorized expense against an open cash register
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashRegisterExpenseBody"
+      responses:
+        "201":
+          description: Expense recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashRegisterSession"
+  /cash-register/{id}/close:
+    post:
+      operationId: closeCashRegister
+      tags: [sales]
+      summary: Close the current user's cash register and persist its difference
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseCashRegisterBody"
+      responses:
+        "200":
+          description: Cash register closed with expected and counted cash
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashRegisterSession"
 
   # QUOTES
   /quotes:
@@ -1311,13 +1491,39 @@ components:
           type: integer
         name:
           type: string
+        sku:
+          type: ["string", "null"]
         barcode:
           type: ["string", "null"]
         description:
           type: ["string", "null"]
+        size:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        subcategory:
+          type: ["string", "null"]
+        material:
+          type: ["string", "null"]
+        season:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        supplierId:
+          type: ["integer", "null"]
+        supplierName:
+          type: ["string", "null"]
+        entryDate:
+          type: string
         purchasePrice:
           type: number
         salePrice:
+          type: number
+        wholesalePrice:
+          type: ["number", "null"]
+        promotionalPrice:
+          type: ["number", "null"]
+        profitMargin:
           type: number
         stock:
           type: integer
@@ -1333,23 +1539,50 @@ components:
           type: ["string", "null"]
         imageUrl:
           type: ["string", "null"]
+        imageUrls:
+          type: array
+          maxItems: 8
+          items:
+            type: string
         createdAt:
           type: string
-      required: [id, name, purchasePrice, salePrice, stock, minStock, createdAt]
+      required: [id, name, entryDate, purchasePrice, salePrice, profitMargin, stock, minStock, imageUrls, createdAt]
 
     CreateProductBody:
       type: object
       properties:
         name:
           type: string
+        sku:
+          type: ["string", "null"]
         barcode:
           type: ["string", "null"]
         description:
+          type: ["string", "null"]
+        size:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        subcategory:
+          type: ["string", "null"]
+        material:
+          type: ["string", "null"]
+        season:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        supplierId:
+          type: ["integer", "null"]
+        entryDate:
           type: ["string", "null"]
         purchasePrice:
           type: number
         salePrice:
           type: number
+        wholesalePrice:
+          type: ["number", "null"]
+        promotionalPrice:
+          type: ["number", "null"]
         stock:
           type: integer
         minStock:
@@ -1360,6 +1593,11 @@ components:
           type: ["integer", "null"]
         imageUrl:
           type: ["string", "null"]
+        imageUrls:
+          type: array
+          maxItems: 8
+          items:
+            type: string
       required: [name, purchasePrice, salePrice, stock, minStock]
 
     GetProductsQueryParams:
@@ -1427,8 +1665,20 @@ components:
           type: ["string", "null"]
         phone:
           type: ["string", "null"]
+        whatsapp:
+          type: ["string", "null"]
         address:
           type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        productsProvided:
+          type: array
+          items:
+            type: string
+        totalPurchased:
+          type: number
+        pendingDebt:
+          type: number
         createdAt:
           type: string
       required: [id, name, createdAt]
@@ -1446,9 +1696,50 @@ components:
           type: ["string", "null"]
         phone:
           type: ["string", "null"]
+        whatsapp:
+          type: ["string", "null"]
+          maxLength: 30
         address:
           type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+          maxLength: 150
       required: [name]
+
+    SupplierPurchase:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [purchase, supplier_order]
+        reference:
+          type: ["string", "null"]
+        total:
+          type: number
+        amountPaid:
+          type: ["number", "null"]
+        balancePending:
+          type: ["number", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        paymentType:
+          type: ["string", "null"]
+          enum: [contado, credito, null]
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productName:
+                type: string
+              quantity:
+                type: integer
+            required: [productName, quantity]
+      required: [id, type, total, createdAt, items]
 
     # SALES
     SaleItem:
@@ -1467,12 +1758,30 @@ components:
       properties:
         customerId:
           type: ["integer", "null"]
+        cashRegisterSessionId:
+          type: ["integer", "null"]
         items:
           type: array
           items:
             $ref: "#/components/schemas/SaleItem"
         paymentMethod:
           type: string
+        payments:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            properties:
+              paymentMethod:
+                type: string
+              amount:
+                type: number
+                exclusiveMinimum: 0
+            required: [paymentMethod, amount]
+        amountPaid:
+          type: ["number", "null"]
+        changeDue:
+          type: ["number", "null"]
         notes:
           type: ["string", "null"]
       required: [items, paymentMethod]
@@ -1515,6 +1824,20 @@ components:
           type: number
         paymentMethod:
           type: string
+        payments:
+          type: array
+          items:
+            type: object
+            properties:
+              paymentMethod:
+                type: string
+              amount:
+                type: number
+            required: [paymentMethod, amount]
+        amountPaid:
+          type: ["number", "null"]
+        changeDue:
+          type: ["number", "null"]
         status:
           type: string
         notes:
@@ -1544,6 +1867,20 @@ components:
           type: number
         paymentMethod:
           type: string
+        payments:
+          type: array
+          items:
+            type: object
+            properties:
+              paymentMethod:
+                type: string
+              amount:
+                type: number
+            required: [paymentMethod, amount]
+        amountPaid:
+          type: ["number", "null"]
+        changeDue:
+          type: ["number", "null"]
         status:
           type: string
         notes:
@@ -1555,6 +1892,89 @@ components:
           items:
             $ref: "#/components/schemas/SaleDetail"
       required: [id, subtotal, iva, total, paymentMethod, status, createdAt, details]
+
+    CashRegisterExpenseBody:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 300
+        amount:
+          type: number
+          exclusiveMinimum: 0
+      required: [description, amount]
+
+    OpenCashRegisterBody:
+      type: object
+      properties:
+        businessDate:
+          type: string
+          format: date
+        openingAmount:
+          type: number
+          minimum: 0
+      required: [businessDate, openingAmount]
+
+    CloseCashRegisterBody:
+      type: object
+      properties:
+        countedCash:
+          type: number
+          minimum: 0
+      required: [countedCash]
+
+    CashRegisterSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        userName:
+          type: string
+        businessDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [open, closed]
+        openingAmount:
+          type: number
+        cashSales:
+          type: number
+        totalsByMethod:
+          type: object
+          additionalProperties:
+            type: number
+        expenses:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              description:
+                type: string
+              amount:
+                type: number
+              authorizedByName:
+                type: string
+              createdAt:
+                type: string
+            required: [id, description, amount, authorizedByName, createdAt]
+        totalExpenses:
+          type: number
+        expectedCash:
+          type: number
+        countedCash:
+          type: ["number", "null"]
+        difference:
+          type: ["number", "null"]
+        openedAt:
+          type: string
+        closedAt:
+          type: ["string", "null"]
+      required: [id, userId, userName, businessDate, status, openingAmount, cashSales, totalsByMethod, expenses, totalExpenses, expectedCash, openedAt]
 
     GetSalesQueryParams:
       type: object
@@ -1705,6 +2125,26 @@ components:
           type: string
         barcode:
           type: ["string", "null"]
+        size:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        sku:
+          type: ["string", "null"]
+        subcategory:
+          type: ["string", "null"]
+        material:
+          type: ["string", "null"]
+        season:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        supplierId:
+          type: ["integer", "null"]
+        supplierName:
+          type: ["string", "null"]
+        entryDate:
+          type: string
         categoryName:
           type: ["string", "null"]
         brandName:
@@ -1712,6 +2152,12 @@ components:
         purchasePrice:
           type: number
         salePrice:
+          type: number
+        wholesalePrice:
+          type: ["number", "null"]
+        promotionalPrice:
+          type: ["number", "null"]
+        profitMargin:
           type: number
         stock:
           type: integer
@@ -1723,7 +2169,133 @@ components:
           type: string
         imageUrl:
           type: ["string", "null"]
-      required: [id, name, purchasePrice, salePrice, stock, minStock, stockValue, status]
+        imageUrls:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+      required: [id, name, entryDate, purchasePrice, salePrice, profitMargin, stock, minStock, stockValue, status, imageUrls]
+
+    InventoryDocumentItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        productName:
+          type: string
+        barcode:
+          type: ["string", "null"]
+        size:
+          type: ["string", "null"]
+        color:
+          type: ["string", "null"]
+        quantity:
+          type: integer
+        countedStock:
+          type: ["integer", "null"]
+        unitCost:
+          type: number
+        notes:
+          type: ["string", "null"]
+      required: [id, productId, productName, quantity, unitCost]
+
+    InventoryDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [purchase, supplier_order, count, damaged, loss]
+        status:
+          type: string
+          enum: [received, prepared, recorded]
+        supplierId:
+          type: ["integer", "null"]
+        supplierName:
+          type: ["string", "null"]
+        reference:
+          type: ["string", "null"]
+        invoiceFileName:
+          type: ["string", "null"]
+        invoiceMimeType:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        total:
+          type: number
+        paymentMethod:
+          type: ["string", "null"]
+        paymentType:
+          type: ["string", "null"]
+          enum: [contado, credito, null]
+        amountPaid:
+          type: ["number", "null"]
+        balancePending:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryDocumentItem"
+      required: [id, type, status, total, createdAt, items]
+
+    CreateInventoryDocumentItem:
+      type: object
+      properties:
+        productId:
+          type: integer
+        quantity:
+          type: integer
+        countedStock:
+          type: ["integer", "null"]
+        unitCost:
+          type: number
+        notes:
+          type: ["string", "null"]
+      required: [productId, quantity, unitCost]
+
+    CreateInventoryDocumentBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [purchase, supplier_order, count, damaged, loss]
+        supplierId:
+          type: ["integer", "null"]
+        reference:
+          type: ["string", "null"]
+        invoiceFileName:
+          type: ["string", "null"]
+          maxLength: 255
+        invoiceMimeType:
+          type: ["string", "null"]
+          enum: [application/pdf, image/jpeg, image/png, image/webp, null]
+        invoiceFileData:
+          type: ["string", "null"]
+          maxLength: 7000000
+        paymentMethod:
+          type: ["string", "null"]
+          maxLength: 100
+        paymentType:
+          type: ["string", "null"]
+          enum: [contado, credito, null]
+        amountPaid:
+          type: ["number", "null"]
+          minimum: 0
+        notes:
+          type: ["string", "null"]
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CreateInventoryDocumentItem"
+      required: [type, items]
 
     # BUSINESS SETTINGS
     BusinessSettings:

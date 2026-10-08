@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, customersTable, salesTable, saleDetailsTable } from "@workspace/db";
-import { eq, ilike, count, sum, min, max, avg } from "drizzle-orm";
+import { eq, ilike, or, count, sum, min, max, avg } from "drizzle-orm";
 import { CreateCustomerBody, GetCustomersQueryParams } from "@workspace/api-zod";
 import { verifyToken, requireRoles, requireAdmin, AuthRequest } from "../middlewares/auth";
 import { auditLog } from "../lib/audit";
@@ -32,7 +32,11 @@ router.get("/", async (req, res) => {
       })
       .from(customersTable)
       .leftJoin(salesTable, eq(salesTable.customerId, customersTable.id))
-      .where(search ? ilike(customersTable.name, `%${search}%`) : undefined)
+      .where(search ? or(
+        ilike(customersTable.name, `%${search}%`),
+        ilike(customersTable.nitCi, `%${search}%`),
+        ilike(customersTable.phone, `%${search}%`)
+      ) : undefined)
       .groupBy(customersTable.id)
       .orderBy(customersTable.name);
 

@@ -11,8 +11,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Toast, confirmDelete } from "@/lib/swal";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, FileText } from "lucide-react";
 import { usePermissions } from "@/hooks/use-permissions";
+import { exportTablePDF } from "@/lib/export-table-pdf";
 
 const categorySchema = z.object({
   name: z.string().min(2, "Mínimo 2 caracteres"),
@@ -82,6 +83,15 @@ export default function Categories() {
   const canUpdate = can("categories", "update");
   const canDelete = can("categories", "delete");
 
+  const exportPDF = () => {
+    exportTablePDF({
+      title: "Categorías",
+      fileName: `Categorias_${new Date().toISOString().slice(0, 10)}.pdf`,
+      headers: ["Nombre", "Descripción", "Productos"],
+      rows: (categories ?? []).map((category) => [category.name, category.description || "-", category.productCount]),
+    });
+  };
+
   if (isLoading) return <div>Cargando...</div>;
 
   const FormContent = () => (
@@ -120,6 +130,9 @@ export default function Categories() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">Categorías</h2>
+        <Button variant="outline" onClick={exportPDF} disabled={!categories?.length}>
+          <FileText className="mr-2 h-4 w-4" /> PDF
+        </Button>
         {canCreate && (
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>

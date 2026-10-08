@@ -13,8 +13,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Toast, confirmDelete } from "@/lib/swal";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, FileText } from "lucide-react";
 import { format } from "date-fns";
+import { exportTablePDF } from "@/lib/export-table-pdf";
 
 const ROLES = [
   { value: "admin",      label: "Admin" },
@@ -39,7 +40,7 @@ const schema = z.object({
 
 const ROLE_PERMISSIONS_SUMMARY: Record<string, string> = {
   admin:      "Acceso completo",
-  vendedor:   "Ventas: crear · Clientes: crear, editar",
+  vendedor:   "Ventas: crear · Clientes · Reportes · Fidelización",
   inventario: "Productos/Categorías/Marcas: crear, editar",
   compras:    "Proveedores: crear, editar · Cotizaciones: crear",
 };
@@ -50,6 +51,23 @@ export default function Users() {
   const updateMutation = useUpdateUser();
   const deleteMutation = useDeleteUser();
   const queryClient = useQueryClient();
+  const exportPDF = () => {
+    exportTablePDF({
+      title: "Usuarios",
+      fileName: `Usuarios_${new Date().toISOString().slice(0, 10)}.pdf`,
+      headers: ["Nombre", "Correo", "Rol", "Permisos", "Fecha de registro"],
+      rows: (users ?? []).map((user) => {
+        const role = user.role?.toLowerCase() ?? "vendedor";
+        return [
+          user.name,
+          user.email,
+          ROLES.find((item) => item.value === role)?.label ?? user.role,
+          ROLE_PERMISSIONS_SUMMARY[role] ?? "—",
+          format(new Date(user.createdAt), "dd/MM/yyyy"),
+        ];
+      }),
+    });
+  };
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -113,6 +131,10 @@ export default function Users() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">Usuarios</h2>
+        <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={exportPDF} disabled={!users?.length || isLoading}>
+          <FileText className="h-4 w-4 mr-2" /> PDF
+        </Button>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button onClick={handleOpenCreate}><Plus className="h-4 w-4 mr-2" /> Nuevo Usuario</Button>
@@ -153,6 +175,7 @@ export default function Users() {
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>

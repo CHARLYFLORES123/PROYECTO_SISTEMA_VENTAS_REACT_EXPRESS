@@ -8,9 +8,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useGetUsers } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Search, RefreshCw, ChevronLeft, ChevronRight, FileDown } from "lucide-react";
+import { Search, RefreshCw, ChevronLeft, ChevronRight, FileDown, FileText } from "lucide-react";
 import { getToken } from "@/lib/auth";
 import * as XLSX from "xlsx";
+import { exportTablePDF } from "@/lib/export-table-pdf";
 
 const PAGE_SIZE = 50;
 const API_URL = (
@@ -146,6 +147,33 @@ export default function Audit() {
     }
   };
 
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      const allData = await fetchAuditLogs({ ...appliedFilters, limit: 10000, offset: 0 });
+      exportTablePDF({
+        title: "Registro de Auditoría",
+        fileName: `Auditoria_${new Date().toISOString().slice(0, 10)}.pdf`,
+        subtitle: `Registros exportados: ${allData.data.length} de ${allData.total} · Se aplican los filtros actuales`,
+        headers: ["Fecha y hora", "Usuario", "Rol", "Acción", "Módulo", "Elemento", "IP", "Detalles"],
+        rows: allData.data.map((log) => [
+          format(new Date(log.createdAt), "dd/MM/yyyy HH:mm:ss", { locale: es }),
+          log.userName ?? `#${log.userId}`,
+          ROLE_LABELS[log.userRole ?? ""] ?? log.userRole ?? "-",
+          log.actionLabel,
+          log.entityLabel,
+          log.entityName ?? (log.entityId ? `#${log.entityId}` : "-"),
+          log.ip ?? "-",
+          log.details ? JSON.stringify(log.details) : "-",
+        ]),
+      });
+    } catch (error) {
+      alert(error instanceof Error ? `Error al exportar: ${error.message}` : "Error al exportar");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
@@ -161,6 +189,10 @@ export default function Audit() {
           <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting || isLoading}>
             <FileDown className={`h-4 w-4 mr-2 ${exporting ? "animate-bounce" : ""}`} />
             {exporting ? "Exportando..." : "Exportar Excel"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting || isLoading}>
+            <FileText className={`h-4 w-4 mr-2 ${exporting ? "animate-bounce" : ""}`} />
+            {exporting ? "Exportando..." : "Exportar PDF"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />

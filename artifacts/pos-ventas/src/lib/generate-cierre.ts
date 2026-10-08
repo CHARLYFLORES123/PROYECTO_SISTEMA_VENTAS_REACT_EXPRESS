@@ -6,6 +6,7 @@ interface CierreSale {
   subtotal: number;
   iva: number;
   paymentMethod: string;
+  payments?: Array<{ paymentMethod: string; amount: number }>;
   status: string;
   createdAt: string;
 }
@@ -83,12 +84,17 @@ export function computeCierreData(sales: CierreSale[], date: string): CierreData
 
   const groupMap = new Map<string, PaymentGroup>();
   for (const s of completed) {
-    const existing = groupMap.get(s.paymentMethod);
-    if (existing) {
-      existing.count++;
-      existing.total += s.total;
-    } else {
-      groupMap.set(s.paymentMethod, { method: s.paymentMethod, count: 1, total: s.total });
+    const payments = s.payments?.length
+      ? s.payments
+      : [{ paymentMethod: s.paymentMethod, amount: s.total }];
+    for (const payment of payments) {
+      const existing = groupMap.get(payment.paymentMethod);
+      if (existing) {
+        existing.count++;
+        existing.total += payment.amount;
+      } else {
+        groupMap.set(payment.paymentMethod, { method: payment.paymentMethod, count: 1, total: payment.amount });
+      }
     }
   }
 
@@ -407,12 +413,8 @@ export function buildCierreHTML(
   <div class="totals-block">
     <div class="totals-inner">
       <div class="tot-row">
-        <span class="lbl">Subtotal (sin IVA):</span>
+        <span class="lbl">Subtotal:</span>
         <span>${sym} ${data.totalSubtotal.toFixed(2)}</span>
-      </div>
-      <div class="tot-row">
-        <span class="lbl">IVA (13%):</span>
-        <span>${sym} ${data.totalIva.toFixed(2)}</span>
       </div>
       <div class="tot-row grand">
         <span>TOTAL:</span>
